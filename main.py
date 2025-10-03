@@ -1,7 +1,7 @@
 import random
 
-ROWS = 5
-COLS = 5
+ROWS = 10
+COLS = 10
 
 BULL = 0
 EMPTY = -1
@@ -22,6 +22,18 @@ def print_bulls():
         print()
 
 
+def print_bulls_with_board(bulls, board):
+    print()
+    for row in range(ROWS):
+        for col in range(COLS):
+            if bulls[row][col] != EMPTY:
+                print("#", end="")
+                print(" ", end="")
+            else:
+                print(f"{board[row][col]} ", end="")
+        print(f"  {' '.join([str(x) for x in board[row]])}")
+
+
 def print_board():
     print()
     for row in board:
@@ -34,6 +46,49 @@ def main():
     create_board()
     print_bulls()
     print_board()
+
+    pen_sets = get_pen_sets()
+    bull_sol = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
+    solve_board(pen_sets, bull_sol)
+
+    print_bulls_with_board(bull_sol, board)
+
+
+def solve_board(
+    pen_sets: list[list[tuple[int, int]]], bull_sol: list[list[int]], pen=0, board=board
+):
+    if pen == len(pen_sets):
+        return True
+
+    # for each pen in pen sets, try out a pen,
+    # and then solve the rest of them with the remaining of the pens
+    # NOTE: this will get all rows and columns, just because there are 10 pens, and we already check
+    # that there can't be more than one bull per row, so "pigeonhole principle" tells us that the 10 pens force 10 rows and 10 cols
+
+    pen_candidates = pen_sets[pen]
+
+    for y, x in pen_candidates:
+        # place a bull in y, x
+        if not check_placement(y, x, bull_sol):
+            continue
+
+        bull_sol[y][x] = BULL
+        if not solve_board(pen_sets, bull_sol, pen + 1):
+            bull_sol[y][x] = EMPTY
+        else:
+            return True
+
+    return False
+
+
+def get_pen_sets(board: list[list[int]] = board):
+    sets: list[list[tuple[int, int]]] = [[] for _ in range(ROWS)]
+    for row in range(ROWS):
+        for col in range(COLS):
+            number = board[row][col]
+            sets[number].append((row, col))
+
+    return sets
 
 
 def create_board():
@@ -83,7 +138,7 @@ def fill_pen(bull_coords: list[tuple[int, int]], board=board):
     while True:
         all_false = True
         for stack in stacks:
-            if expand_bull(*stack) == True:
+            if create_pens(*stack) == True:
                 all_false = False
 
         if all_false:
@@ -101,7 +156,7 @@ def in_board(y: int, x: int):
     return y >= 0 and y < ROWS and x >= 0 and x < COLS
 
 
-def expand_bull(color: int, stack: list[tuple[int, int]], board=board):
+def create_pens(color: int, stack: list[tuple[int, int]], board=board):
     """Directly assign color to board. Returns False if no board was assigned"""
     while len(stack) > 0:
         y, x = stack.pop()
@@ -111,6 +166,14 @@ def expand_bull(color: int, stack: list[tuple[int, int]], board=board):
             return True
 
     return False
+
+
+def check_placement(row: int, col: int, bulls=bulls):
+    return not (
+        check_row_bull(row, bulls)
+        or check_col_bull(col, bulls)
+        or check_bull_touch(row, col, bulls)
+    )
 
 
 def check_row_bull(row: int, bulls=bulls):
