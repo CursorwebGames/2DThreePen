@@ -1,7 +1,7 @@
 import random
 
-ROWS = 10
-COLS = 10
+ROWS = 6
+COLS = 6
 
 BULL = 0
 EMPTY = -1
@@ -42,14 +42,26 @@ def print_board():
         print()
 
 
+board = [
+    [0, 0, 1, 1, 1, 1],
+    [0, 2, 1, 1, 3, 3],
+    [2, 2, 2, 1, 3, 3],
+    [2, 2, 5, 4, 3, 3],
+    [2, 4, 4, 4, 4, 3],
+    [4, 4, 4, 4, 4, 4],
+]
+
+
 def main():
-    create_board()
+    # create_board()
     print_bulls()
     print_board()
 
     pen_sets = get_pen_sets()
     bull_sol = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
-    solve_board(pen_sets, bull_sol)
+    x = solve_board(pen_sets, bull_sol)
+    if not x:
+        print("could not solve")
 
     print_bulls_with_board(bull_sol, board)
 
@@ -82,6 +94,7 @@ def solve_board(
 
 
 def get_pen_sets(board: list[list[int]] = board):
+    """turn regions into a list of coords"""
     sets: list[list[tuple[int, int]]] = [[] for _ in range(ROWS)]
     for row in range(ROWS):
         for col in range(COLS):
