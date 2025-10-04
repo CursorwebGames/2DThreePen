@@ -11,6 +11,17 @@ bulls = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 board = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 
 
+def main():
+    create_board()
+
+    print_bulls()
+    print_board()
+
+    bull_sol = solve_board()
+    print_bulls_with_board(bull_sol, board)
+
+
+### printing ###
 def print_bulls():
     print()
     for row in bulls:
@@ -42,77 +53,76 @@ def print_board():
         print()
 
 
-board = [
-    [0, 0, 1, 1, 1, 1],
-    [0, 2, 1, 1, 3, 3],
-    [2, 2, 2, 1, 3, 3],
-    [2, 2, 5, 4, 3, 3],
-    [2, 4, 4, 4, 4, 3],
-    [4, 4, 4, 4, 4, 4],
-]
+### SOLVER ###
+PenSet = list[tuple[int, int]]
 
 
-def main():
-    # create_board()
-    print_bulls()
-    print_board()
+def solve_board(board=board):
+    pen_sets = get_pen_sets(board)
+    pen_sets.sort(key=lambda pen: len(pen))
 
-    pen_sets = get_pen_sets()
     bull_sol = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
-    x = solve_board(pen_sets, bull_sol)
-    if not x:
+    success = solve_pensets(pen_sets, bull_sol)
+    if not success:
         print("could not solve")
 
-    print_bulls_with_board(bull_sol, board)
+    return bull_sol
 
 
-def solve_board(
-    pen_sets: list[list[tuple[int, int]]], bull_sol: list[list[int]], pen=0, board=board
-):
+def solve_pensets(pen_sets: list[PenSet], bull_sol: list[list[int]], pen=0):
+    # for each pen in pen sets, try out a pen,
+    # and then solve the rest of them with the remaining of the pens
+    # NOTE: this will get all rows and columns, just because there are 10 pens,
+    # and we already check that there can't be more than one bull per row,
+    # so "pigeonhole principle" tells us that the 10 pens force 10 rows and 10 cols
+
     if pen == len(pen_sets):
         return True
 
-    # for each pen in pen sets, try out a pen,
-    # and then solve the rest of them with the remaining of the pens
-    # NOTE: this will get all rows and columns, just because there are 10 pens, and we already check
-    # that there can't be more than one bull per row, so "pigeonhole principle" tells us that the 10 pens force 10 rows and 10 cols
+    candidates = pen_sets[pen]
 
-    pen_candidates = pen_sets[pen]
-
-    for y, x in pen_candidates:
+    for y, x in candidates:
         # place a bull in y, x
-        if not check_placement(y, x, bull_sol):
+        if not valid_placement(y, x, bull_sol):
             continue
 
         bull_sol[y][x] = BULL
-        if not solve_board(pen_sets, bull_sol, pen + 1):
-            bull_sol[y][x] = EMPTY
-        else:
+
+        if solve_pensets(pen_sets, bull_sol, pen + 1):
             return True
+
+        bull_sol[y][x] = EMPTY
 
     return False
 
 
 def get_pen_sets(board: list[list[int]] = board):
-    """turn regions into a list of coords"""
-    sets: list[list[tuple[int, int]]] = [[] for _ in range(ROWS)]
+    """
+    turn regions into a list of coords,
+    `0: [# of cells in color 0], etc.`
+    """
+    pen_sets: list[PenSet] = [[] for _ in range(ROWS)]
     for row in range(ROWS):
         for col in range(COLS):
             number = board[row][col]
-            sets[number].append((row, col))
+            pen_sets[number].append((row, col))
 
-    return sets
+    return pen_sets
 
 
+### BOARD GENERATOR ###
 def create_board():
     bull_coords = []
-    out = create_bulls(bull_coords)
-    if not out:
+    success = create_bulls(bull_coords)
+    if not success:
         raise Exception("skill issue lmao")
-    fill_pen(bull_coords)
+    create_pens(bull_coords)
 
 
 def create_bulls(bull_coords: list[tuple[int, int]], row=0, bulls=bulls):
+    # recursively add bulls, one per each row, backtracking if a bull placement is impossible
+    # so like a dfs
+    # stores bull coords in `bull_coords`
     if row >= ROWS:
         return True
 
@@ -122,7 +132,7 @@ def create_bulls(bull_coords: list[tuple[int, int]], row=0, bulls=bulls):
     while len(tries) > 0:
         col = tries.pop()
 
-        if check_row_bull(row) or check_col_bull(col) or check_bull_touch(row, col):
+        if not valid_placement(row, col):
             continue
 
         bulls[row][col] = BULL
@@ -136,7 +146,8 @@ def create_bulls(bull_coords: list[tuple[int, int]], row=0, bulls=bulls):
     return False
 
 
-def fill_pen(bull_coords: list[tuple[int, int]], board=board):
+def create_pens(bull_coords: list[tuple[int, int]], board=board):
+    """On each bull coord, expand the region"""
     # careful that the coords are (y, x)
     # while still can expand, for each bull region, choose to expand it
 
@@ -151,25 +162,14 @@ def fill_pen(bull_coords: list[tuple[int, int]], board=board):
     while True:
         all_false = True
         for stack in stacks:
-            if create_pens(*stack) == True:
+            if create_pen_floodfill(*stack) == True:
                 all_false = False
 
         if all_false:
             break
 
 
-def next_directions(y: int, x: int):
-    # doesn't check if next is valid
-    o = [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]
-    random.shuffle(o)
-    return o
-
-
-def in_board(y: int, x: int):
-    return y >= 0 and y < ROWS and x >= 0 and x < COLS
-
-
-def create_pens(color: int, stack: list[tuple[int, int]], board=board):
+def create_pen_floodfill(color: int, stack: list[tuple[int, int]], board=board):
     """Directly assign color to board. Returns False if no board was assigned"""
     while len(stack) > 0:
         y, x = stack.pop()
@@ -181,7 +181,20 @@ def create_pens(color: int, stack: list[tuple[int, int]], board=board):
     return False
 
 
-def check_placement(row: int, col: int, bulls=bulls):
+### UTILITY ###
+def next_directions(y: int, x: int):
+    """Gets the adjacent blocks that fill_pen can expand to"""
+    # doesn't check if next is valid
+    o = [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]
+    random.shuffle(o)
+    return o
+
+
+def in_board(y: int, x: int):
+    return y >= 0 and y < ROWS and x >= 0 and x < COLS
+
+
+def valid_placement(row: int, col: int, bulls=bulls):
     return not (
         check_row_bull(row, bulls)
         or check_col_bull(col, bulls)
@@ -213,7 +226,6 @@ def check_bull_touch(y: int, x: int, bulls=bulls):
             if dy == 0 and dx == 0:
                 continue
 
-            # if y + dy < 0 or y + dy >= ROWS or x + dx < 0 or x + dx >= COLS:
             if not in_board(y + dy, x + dx):
                 continue
 
