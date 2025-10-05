@@ -1,4 +1,7 @@
 import random
+from collections import deque
+import copy
+import json
 
 ROWS = 6
 COLS = 6
@@ -17,12 +20,17 @@ def main():
     print_bulls()
     print_board()
 
-    bull_sol = solve_board()
-    print_bulls_with_board(bull_sol, board)
+    solutions = solve_board()
+
+    print(len(solutions), "solutions found")
+    print_bulls_with_board(solutions[0], board)
+
+    with open("solutions.json", "w") as f:
+        json.dump({"solutions": solutions, "board": board}, f)
 
 
 ### printing ###
-def print_bulls():
+def print_bulls(bulls=bulls):
     print()
     for row in bulls:
         for col in row:
@@ -59,41 +67,65 @@ PenSet = list[tuple[int, int]]
 
 def solve_board(board=board):
     pen_sets = get_pen_sets(board)
+    # heuristic: start with smallest pens first
     pen_sets.sort(key=lambda pen: len(pen))
 
-    bull_sol = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
-    success = solve_pensets(pen_sets, bull_sol)
-    if not success:
+    solutions = solve_pensets(pen_sets)
+    if len(solutions) == 0:
         print("could not solve")
 
-    return bull_sol
+    return solutions
 
 
-def solve_pensets(pen_sets: list[PenSet], bull_sol: list[list[int]], pen=0):
+def new_bull_sol():
+    return [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
+
+
+def solve_pensets(pen_sets: list[PenSet], limit=2):
     # for each pen in pen sets, try out a pen,
     # and then solve the rest of them with the remaining of the pens
     # NOTE: this will get all rows and columns, just because there are 10 pens,
     # and we already check that there can't be more than one bull per row,
     # so "pigeonhole principle" tells us that the 10 pens force 10 rows and 10 cols
 
-    if pen == len(pen_sets):
-        return True
+    queue = deque([(0, new_bull_sol())])
+    solutions: list[list[list[int]]] = []
 
-    candidates = pen_sets[pen]
-
-    for y, x in candidates:
-        # place a bull in y, x
-        if not valid_placement(y, x, bull_sol):
+    while len(queue) > 0:
+        pen_idx, bull_sol = queue.popleft()
+        if pen_idx == len(pen_sets):
+            solutions.append(bull_sol)
+            # if len(solutions) >= limit:
+            #     break
             continue
 
-        bull_sol[y][x] = BULL
+        candidates = pen_sets[pen_idx]
+        for y, x in candidates:
+            bs = copy.deepcopy(bull_sol)
+            if valid_placement(y, x, bs):
+                bs[y][x] = BULL
+                queue.append((pen_idx + 1, bs))
 
-        if solve_pensets(pen_sets, bull_sol, pen + 1):
-            return True
+    return solutions
 
-        bull_sol[y][x] = EMPTY
+    # if pen == len(pen_sets):
+    #     return True
 
-    return False
+    # candidates = pen_sets[pen]
+
+    # for y, x in candidates:
+    #     # place a bull in y, x
+    #     if not valid_placement(y, x, bull_sol):
+    #         continue
+
+    #     bull_sol[y][x] = BULL
+
+    #     if solve_pensets(pen_sets, bull_sol, pen + 1):
+    #         return True
+
+    #     bull_sol[y][x] = EMPTY
+
+    # return False
 
 
 def get_pen_sets(board: list[list[int]] = board):
