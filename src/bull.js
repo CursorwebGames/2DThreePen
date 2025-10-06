@@ -9,24 +9,11 @@ class BullPen {
         this.bulls = Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
         this.board = Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
 
-        // this.board = [
-        //     [3, 3, 5, 5, 5, 4],
-        //     [3, 3, 1, 5, 5, 4],
-        //     [3, 3, 1, 1, 5, 4],
-        //     [3, 3, 1, 2, 4, 4],
-        //     [1, 1, 1, 2, 0, 0],
-        //     [2, 2, 2, 2, 0, 0]
-        // ];
-        // this.board = [
-        //     [0, 0, 1, 1, 1, 1],
-        //     [0, 2, 1, 1, 3, 3],
-        //     [2, 2, 2, 1, 3, 3],
-        //     [2, 2, 5, 4, 3, 3],
-        //     [2, 4, 4, 4, 4, 3],
-        //     [4, 4, 4, 4, 4, 4],
-        // ];
-        this.board = [[3, 3, 5, 5, 5, 4], [3, 3, 1, 5, 5, 0], [3, 3, 1, 1, 0, 0], [3, 3, 1, 0, 0, 0], [1, 1, 1, 0, 0, 0], [2, 0, 0, 0, 0, 0]];
-        // this.board = solutions.board;
+        if (MANUAL_BOARD) {
+            // SET YOUR BOARD HERE
+            this.board =
+                [[4, 4, 4, 5, 5, 5], [3, 4, 4, 5, 1, 1], [4, 4, 5, 5, 2, 1], [0, 4, 5, 2, 2, 1], [0, 0, 0, 2, 2, 2], [0, 2, 2, 2, 2, 2]];
+        }
 
         /**
          * @type {[number, number][]}
@@ -34,7 +21,10 @@ class BullPen {
         this.bullCoords = [];
         this.colors = [];
 
-        // this.createBoard();
+        if (!MANUAL_BOARD) {
+            this.createBoard();
+        }
+
         for (let i = 0; i < this.board.length; i++) {
             this.colors.push(color(random(50, 255), random(50, 255), random(50, 255)));
         }

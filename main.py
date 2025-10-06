@@ -67,6 +67,11 @@ PenSet = list[tuple[int, int]]
 
 def solve_board(board=board):
     pen_sets = get_pen_sets(board)
+
+    if len(pen_sets) != ROWS:
+        print("could not solve (invalid board)")
+        return []
+
     # heuristic: start with smallest pens first
     pen_sets.sort(key=lambda pen: len(pen))
 

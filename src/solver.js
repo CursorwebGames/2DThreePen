@@ -9,6 +9,12 @@ class Solver {
 
     solveBoard() {
         const penSets = this.getPenSets(this.board);
+
+        if (penSets.length != SIZE) {
+            // invalid board: you need same number of pens as columns
+            return [];
+        }
+
         // heuristic: start with smallest pen
         penSets.sort((a, b) => a.length - b.length);
 

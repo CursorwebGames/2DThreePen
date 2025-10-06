@@ -1,5 +1,8 @@
 const RECT_SIZE = 50;
-const PADDING = 2;
+const PADDING = 1;
+
+const REARRANGING_MODE = false; // rearrange the tiles
+const MANUAL_BOARD = true; // manually enter in board regions
 
 let pen;
 let solutions;
@@ -14,9 +17,10 @@ function setup() {
 }
 
 function draw() {
-    background('pink')
+    background('pink');
     const bulls = pen.bulls;
-    strokeWeight(2);
+    strokeWeight(PADDING);
+    stroke(50);
 
     for (let y = 0; y < bulls.length; y++) {
         for (let x = 0; x < bulls[0].length; x++) {
@@ -28,13 +32,16 @@ function draw() {
                 fill(pen.colors[pen.board[y][x]] || 0);
             }
 
-            rect(rx, ry, RECT_SIZE, RECT_SIZE);
-            if (pen.bulls[y][x] == BULL) {
-                fill(0);
-                circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 30, 30);
-            } else if (pen.bulls[y][x] == DOT) {
-                fill(123);
-                circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 10, 10);
+            rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
+
+            if (!REARRANGING_MODE) {
+                if (pen.bulls[y][x] == BULL) {
+                    fill(0);
+                    circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 30, 30);
+                } else if (pen.bulls[y][x] == DOT) {
+                    fill(123);
+                    circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 10, 10);
+                }
             }
         }
     }
@@ -43,40 +50,45 @@ function draw() {
 function mousePressed() {
     const bulls = pen.bulls;
 
-    // -----
+    if (REARRANGING_MODE) {
+        for (let y = 0; y < bulls.length; y++) {
+            for (let x = 0; x < bulls[0].length; x++) {
+                const rx = (RECT_SIZE + PADDING / 2) * x;
+                const ry = (RECT_SIZE + PADDING / 2) * y;
+                if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE)) {
+                    if (mouseButton == LEFT) {
+                        pen.board[y][x]++;
+                    } else {
+                        pen.board[y][x]--;
+                        pen.board[y][x] += SIZE;
+                    }
 
-    // for (let y = 0; y < bulls.length; y++) {
-    //     for (let x = 0; x < bulls[0].length; x++) {
-    //         const rx = (RECT_SIZE + PADDING / 2) * x;
-    //         const ry = (RECT_SIZE + PADDING / 2) * y;
-    //         if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == LEFT) {
-    //             pen.board[y][x] = 0;
-    //         }
-    //     }
-    // }
-
-
-    // solutions = new Solver(pen).solveBoard();
-    // console.log(solutions.length)
-    // return;
-
-    for (let y = 0; y < bulls.length; y++) {
-        for (let x = 0; x < bulls[0].length; x++) {
-            const rx = (RECT_SIZE + PADDING / 2) * x;
-            const ry = (RECT_SIZE + PADDING / 2) * y;
-            if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == LEFT) {
-                if (pen.bulls[y][x] != BULL) {
-                    pen.bulls[y][x] = BULL;
-                } else {
-                    pen.bulls[y][x] = EMPTY;
+                    pen.board[y][x] %= SIZE;
                 }
             }
+        }
 
-            if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == RIGHT) {
-                if (pen.bulls[y][x] != DOT) {
-                    pen.bulls[y][x] = DOT;
-                } else {
-                    pen.bulls[y][x] = EMPTY;
+        solutions = new Solver(pen).solveBoard();
+        console.log(solutions.length);
+    } else {
+        for (let y = 0; y < bulls.length; y++) {
+            for (let x = 0; x < bulls[0].length; x++) {
+                const rx = (RECT_SIZE + PADDING / 2) * x;
+                const ry = (RECT_SIZE + PADDING / 2) * y;
+                if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == LEFT) {
+                    if (pen.bulls[y][x] != BULL) {
+                        pen.bulls[y][x] = BULL;
+                    } else {
+                        pen.bulls[y][x] = EMPTY;
+                    }
+                }
+
+                if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == RIGHT) {
+                    if (pen.bulls[y][x] != DOT) {
+                        pen.bulls[y][x] = DOT;
+                    } else {
+                        pen.bulls[y][x] = EMPTY;
+                    }
                 }
             }
         }
@@ -84,9 +96,11 @@ function mousePressed() {
 }
 
 function keyPressed() {
-    pen = new BullPen();
-    solutions = new Solver(pen).solveBoard();
-    console.log(solutions.length)
+    if (REARRANGING_MODE) {
+        pen = new BullPen();
+        solutions = new Solver(pen).solveBoard();
+        console.log(solutions.length);
+    }
 }
 
 function mouseOver(x, y, w, h) {
