@@ -2,11 +2,13 @@ const RECT_SIZE = 50;
 const PADDING = 2;
 
 let pen;
+let solutionIndex = 0;
 
 function setup() {
     const c = createCanvas(500, 500);
     c.elt.addEventListener("contextmenu", e => e.preventDefault());
     pen = new BullPen();
+    pen.createBoard();
 }
 
 function draw() {
@@ -19,16 +21,16 @@ function draw() {
             const rx = (RECT_SIZE + PADDING / 2) * x;
             const ry = (RECT_SIZE + PADDING / 2) * y;
             if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE)) {
-                fill(pen.colors[pen.board[y][x]]);
+                fill(pen.colors[pen.board[y][x]] || 0);
             } else {
-                fill(pen.colors[pen.board[y][x]]);
+                fill(pen.colors[pen.board[y][x]] || 0);
             }
 
             rect(rx, ry, RECT_SIZE, RECT_SIZE);
-            if (pen.bulls[y][x] == 1) {
+            if (pen.bulls[y][x] == BULL) {
                 fill(0);
                 circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 30, 30);
-            } else if (pen.bulls[y][x] == 0) {
+            } else if (pen.bulls[y][x] == DOT) {
                 fill(123);
                 circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 10, 10);
             }
@@ -43,18 +45,18 @@ function mousePressed() {
             const rx = (RECT_SIZE + PADDING / 2) * x;
             const ry = (RECT_SIZE + PADDING / 2) * y;
             if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == LEFT) {
-                if (pen.bulls[y][x] != 1) {
-                    pen.bulls[y][x] = 1;
+                if (pen.bulls[y][x] != BULL) {
+                    pen.bulls[y][x] = BULL;
                 } else {
-                    pen.bulls[y][x] = -1;
+                    pen.bulls[y][x] = EMPTY;
                 }
             }
 
             if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == RIGHT) {
-                if (pen.bulls[y][x] != 0) {
-                    pen.bulls[y][x] = 0;
+                if (pen.bulls[y][x] != DOT) {
+                    pen.bulls[y][x] = DOT;
                 } else {
-                    pen.bulls[y][x] = -1;
+                    pen.bulls[y][x] = EMPTY;
                 }
             }
         }

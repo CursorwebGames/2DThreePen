@@ -108,25 +108,6 @@ def solve_pensets(pen_sets: list[PenSet], limit=2):
 
     return solutions
 
-    # if pen == len(pen_sets):
-    #     return True
-
-    # candidates = pen_sets[pen]
-
-    # for y, x in candidates:
-    #     # place a bull in y, x
-    #     if not valid_placement(y, x, bull_sol):
-    #         continue
-
-    #     bull_sol[y][x] = BULL
-
-    #     if solve_pensets(pen_sets, bull_sol, pen + 1):
-    #         return True
-
-    #     bull_sol[y][x] = EMPTY
-
-    # return False
-
 
 def get_pen_sets(board: list[list[int]] = board):
     """
@@ -194,14 +175,14 @@ def create_pens(bull_coords: list[tuple[int, int]], board=board):
     while True:
         all_false = True
         for stack in stacks:
-            if create_pen_floodfill(*stack) == True:
+            if floodfill_pen(*stack) == True:
                 all_false = False
 
         if all_false:
             break
 
 
-def create_pen_floodfill(color: int, stack: list[tuple[int, int]], board=board):
+def floodfill_pen(color: int, stack: list[tuple[int, int]], board=board):
     """Directly assign color to board. Returns False if no board was assigned"""
     while len(stack) > 0:
         y, x = stack.pop()
@@ -215,7 +196,7 @@ def create_pen_floodfill(color: int, stack: list[tuple[int, int]], board=board):
 
 ### UTILITY ###
 def next_directions(y: int, x: int):
-    """Gets the adjacent blocks that fill_pen can expand to"""
+    """Gets the adjacent cells that floodfill_pen can expand to"""
     # doesn't check if next is valid
     o = [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]
     random.shuffle(o)
