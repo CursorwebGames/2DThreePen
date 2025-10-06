@@ -2,13 +2,15 @@ const RECT_SIZE = 50;
 const PADDING = 2;
 
 let pen;
+let solutions;
 let solutionIndex = 0;
 
 function setup() {
     const c = createCanvas(500, 500);
     c.elt.addEventListener("contextmenu", e => e.preventDefault());
     pen = new BullPen();
-    pen.createBoard();
+    solutions = new Solver(pen).solveBoard();
+    console.log(solutions.length)
 }
 
 function draw() {
@@ -40,6 +42,24 @@ function draw() {
 
 function mousePressed() {
     const bulls = pen.bulls;
+
+    // -----
+
+    // for (let y = 0; y < bulls.length; y++) {
+    //     for (let x = 0; x < bulls[0].length; x++) {
+    //         const rx = (RECT_SIZE + PADDING / 2) * x;
+    //         const ry = (RECT_SIZE + PADDING / 2) * y;
+    //         if (mouseOver(rx, ry, RECT_SIZE, RECT_SIZE) && mouseButton == LEFT) {
+    //             pen.board[y][x] = 0;
+    //         }
+    //     }
+    // }
+
+
+    // solutions = new Solver(pen).solveBoard();
+    // console.log(solutions.length)
+    // return;
+
     for (let y = 0; y < bulls.length; y++) {
         for (let x = 0; x < bulls[0].length; x++) {
             const rx = (RECT_SIZE + PADDING / 2) * x;
@@ -61,6 +81,12 @@ function mousePressed() {
             }
         }
     }
+}
+
+function keyPressed() {
+    pen = new BullPen();
+    solutions = new Solver(pen).solveBoard();
+    console.log(solutions.length)
 }
 
 function mouseOver(x, y, w, h) {

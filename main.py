@@ -88,6 +88,7 @@ def solve_pensets(pen_sets: list[PenSet], limit=2):
     # and we already check that there can't be more than one bull per row,
     # so "pigeonhole principle" tells us that the 10 pens force 10 rows and 10 cols
 
+    # (pen_idx, solution)
     queue = deque([(0, new_bull_sol())])
     solutions: list[list[list[int]]] = []
 
