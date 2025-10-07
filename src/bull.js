@@ -13,7 +13,6 @@ class BullPen {
             // SET YOUR BOARD HERE
             this.board =
                 genSolutions.board;
-            // [[3, 5, 5, 4, 4, 4], [3, 5, 5, 4, 4, 2], [3, 3, 5, 4, 4, 2], [1, 3, 3, 0, 2, 2], [1, 1, 0, 0, 2, 2], [1, 1, 0, 0, 0, 2]];
         }
 
         /**

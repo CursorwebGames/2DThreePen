@@ -72,7 +72,7 @@ def print_board(board=board, end=""):
 
 
 def print_solution_stats(solutions):
-    counts = get_solution_stats(solutions)
+    counts = get_solution_dist(solutions)
     for k, v in counts.items():
         print(f"({k}: {v})", end=" ")
 
@@ -148,7 +148,7 @@ def get_pen_sets(board: list[list[int]] = board):
     return pen_sets
 
 
-def get_solution_stats(solutions: list[list[list[int]]], board=board):
+def get_solution_dist(solutions: list[list[list[int]]], board=board):
     """
     Gets the number of unique possible placements per set
     - some tiles are just never valid, and will never lead to a solution

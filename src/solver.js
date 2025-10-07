@@ -5,6 +5,14 @@ class Solver {
     constructor(bp) {
         this.bp = bp;
         this.board = bp.board;
+
+        this.solve();
+    }
+
+    solve() {
+        this.solutions = this.solveBoard();
+        this.solutionMask = this.getSolutionMask(this.solutions);
+        this.maxColor = this.getMaxColor(this.solutions, this.board);
     }
 
     solveBoard() {
@@ -66,7 +74,7 @@ class Solver {
         return solutions;
     }
 
-    getSolutionStats(solutions, board) {
+    getSolutionDist(solutions, board) {
         const counts = {};
 
         for (const solution of solutions) {
@@ -92,7 +100,22 @@ class Solver {
         return out;
     }
 
-    static getSolutionMask(solutions) {
+    getMaxColor(solutions, board) {
+        const counts = this.getSolutionDist(solutions, board);
+        let maxColor = null;
+        let maxVal = -1;
+
+        for (const k in counts) {
+            if (counts[k] > maxVal) {
+                maxVal = counts[k];
+                maxColor = k;
+            }
+        }
+
+        return maxColor;
+    }
+
+    getSolutionMask(solutions) {
         const counts = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
 
         for (const solution of solutions) {

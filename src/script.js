@@ -2,11 +2,11 @@ const RECT_SIZE = 50;
 const PADDING = 1;
 
 const REARRANGING_MODE = true; // rearrange the tiles
-const MANUAL_BOARD = true; // manually enter in board regions
+const MANUAL_BOARD = false; // manually enter in board regions
 
 let pen;
-let solutions;
-let solutionMask;
+/** @type {{ solutions: any, solutionMask: any } & Solver} */
+let solver;
 
 // step-through 14 "mode"
 let solutionIndex = 0;
@@ -19,9 +19,8 @@ function setup() {
     const c = createCanvas(500, 500);
     c.elt.addEventListener("contextmenu", e => e.preventDefault());
     pen = new BullPen();
-    solutions = new Solver(pen).solveBoard();
-    solutionMask = Solver.getSolutionMask(solutions);
-    console.log(solutions.length)
+    solver = new Solver(pen);
+    console.log(solver.solutions.length);
 }
 
 function draw() {
@@ -41,6 +40,10 @@ function draw() {
             fill(pen.colors[pen.board[y][x]] || 0);
             rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
 
+            if (pen.board[y][x] == solver.maxColor) {
+                line(rx, ry, rx + RECT_SIZE, ry + RECT_SIZE);
+            }
+
             if (!REARRANGING_MODE) {
                 if (pen.bulls[y][x] == BULL) {
                     fill(0);
@@ -54,7 +57,7 @@ function draw() {
             push();
             strokeWeight(2);
             fill(255);
-            text(solutionMask[y][x], rx + RECT_SIZE / 2, ry + RECT_SIZE / 2 + 10);
+            text(solver.solutionMask[y][x], rx + RECT_SIZE / 2, ry + RECT_SIZE / 2 + 10);
             pop();
         }
     }
@@ -93,9 +96,8 @@ function mousePressed() {
             prevClick = currClick;
         }
 
-        solutions = new Solver(pen).solveBoard();
-        solutionMask = Solver.getSolutionMask(solutions);
-        console.log('solutions:', solutions.length, 'steps:', steps);
+        solver.solve();
+        console.log('solutions:', solver.solutions.length, 'steps:', steps);
     } else {
         for (let y = 0; y < bulls.length; y++) {
             for (let x = 0; x < bulls[0].length; x++) {
@@ -124,8 +126,8 @@ function mousePressed() {
 function keyPressed() {
     if (REARRANGING_MODE) {
         pen = new BullPen();
-        solutions = new Solver(pen).solveBoard();
-        console.log(solutions.length);
+        solver.solve();
+        console.log(solver.solutions.length);
     }
 
     // pen.bulls = genSolutions.solutions[solutionIndex];
