@@ -26,7 +26,7 @@ class BullPen {
         }
 
         for (let i = 0; i < this.board.length; i++) {
-            const hue = map(i, 0, this.board.length, 0, 360);
+            const hue = floor(map(i, 0, SIZE, 0, 360));
             this.colors.push(color(`hsl(${hue}, 80%, 60%)`));
         }
     }

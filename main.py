@@ -3,27 +3,19 @@ from collections import deque
 import copy
 import json
 
-ROWS = 6
-COLS = 6
+ROWS = 15
+COLS = 15
 
 BULL = 0
 EMPTY = -1
 
 bulls = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 # 0-4 are the colors
-# board = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
-board = [
-    [3, 3, 5, 5, 5, 4],
-    [3, 3, 1, 5, 5, 0],
-    [3, 3, 1, 1, 0, 0],
-    [3, 3, 1, 0, 0, 0],
-    [1, 1, 1, 0, 0, 0],
-    [2, 0, 0, 0, 0, 0],
-]
+board = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 
 
 def main():
-    # create_board()
+    create_board()
 
     print_bulls()
     print_board()

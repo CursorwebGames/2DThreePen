@@ -1,3 +1,5 @@
+const LIMIT = 5;
+
 class Solver {
     /**
      * @param {BullPen} bp
@@ -12,7 +14,7 @@ class Solver {
     solve() {
         this.solutions = this.solveBoard();
         this.solutionMask = this.getSolutionMask(this.solutions);
-        this.maxColor = this.getMaxColor(this.solutions, this.board);
+        this.onesColor = this.getOnesColor(this.solutions, this.board);
     }
 
     solveBoard() {
@@ -47,7 +49,7 @@ class Solver {
         return penSets;
     }
 
-    solvePenSets(penSets) {
+    solvePenSets(penSets, limit = LIMIT) {
         // TODO: use an actual queue
         // tuple of (pen_idx, solution)
         const queue = [[0, this.newBullSol()]];
@@ -58,6 +60,10 @@ class Solver {
             if (penIdx == penSets.length) {
                 // base case: solved all pen sets
                 solutions.push(bullSol);
+                if (solutions.length >= limit) {
+                    break;
+                }
+
                 continue;
             }
 
@@ -100,19 +106,20 @@ class Solver {
         return out;
     }
 
-    getMaxColor(solutions, board) {
+    /**
+     * Ones means that there is only one cell that has bulls, and the rest of the region is all zeroes
+     */
+    getOnesColor(solutions, board) {
         const counts = this.getSolutionDist(solutions, board);
-        let maxColor = null;
-        let maxVal = -1;
+        let ones = new Set();
 
-        for (const k in counts) {
-            if (counts[k] > maxVal) {
-                maxVal = counts[k];
-                maxColor = k;
+        for (const c in counts) {
+            if (counts[c] == 1) {
+                ones.add(Number(c));
             }
         }
 
-        return maxColor;
+        return ones;
     }
 
     getSolutionMask(solutions) {

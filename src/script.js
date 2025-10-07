@@ -40,7 +40,7 @@ function draw() {
             fill(pen.colors[pen.board[y][x]] || 0);
             rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
 
-            if (pen.board[y][x] == solver.maxColor) {
+            if (solver.onesColor.has(pen.board[y][x])) {
                 line(rx, ry, rx + RECT_SIZE, ry + RECT_SIZE);
             }
 
@@ -124,11 +124,12 @@ function mousePressed() {
 }
 
 function keyPressed() {
-    if (REARRANGING_MODE) {
-        pen = new BullPen();
-        solver.solve();
-        console.log(solver.solutions.length);
-    }
+    // if (REARRANGING_MODE) {
+    //     pen = new BullPen();
+    //     solver = new Solver(pen);
+    //     solver.solve();
+    //     console.log(solver.solutions.length);
+    // }
 
     // pen.bulls = genSolutions.solutions[solutionIndex];
     // solutionIndex++;
