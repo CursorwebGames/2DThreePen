@@ -65,4 +65,46 @@ class Solver {
 
         return solutions;
     }
+
+    getSolutionStats(solutions, board) {
+        const counts = {};
+
+        for (const solution of solutions) {
+            for (let y = 0; y < SIZE; y++) {
+                for (let x = 0; x < SIZE; x++) {
+                    if (solution[y][x] == BULL) {
+                        const color = board[y][x];
+                        if (counts[color] == null) {
+                            counts[color] = new Set();
+                        }
+
+                        counts[color].add(`${y},${x}`);
+                    }
+                }
+            }
+        }
+
+        const out = {};
+        for (const key in counts) {
+            out[key] = counts[key].size;
+        }
+
+        return out;
+    }
+
+    static getSolutionMask(solutions) {
+        const counts = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+
+        for (const solution of solutions) {
+            for (let y = 0; y < SIZE; y++) {
+                for (let x = 0; x < SIZE; x++) {
+                    if (solution[y][x] == BULL) {
+                        counts[y][x] += 1;
+                    }
+                }
+            }
+        }
+
+        return counts;
+    }
 }

@@ -11,11 +11,19 @@ EMPTY = -1
 
 bulls = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 # 0-4 are the colors
-board = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
+# board = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
+board = [
+    [3, 3, 5, 5, 5, 4],
+    [3, 3, 1, 5, 5, 0],
+    [3, 3, 1, 1, 0, 0],
+    [3, 3, 1, 0, 0, 0],
+    [1, 1, 1, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0],
+]
 
 
 def main():
-    create_board()
+    # create_board()
 
     print_bulls()
     print_board()
@@ -23,7 +31,9 @@ def main():
     solutions = solve_board()
 
     print(len(solutions), "solutions found")
-    print_bulls_with_board(solutions[0], board)
+    # print_bulls_with_board(solutions[0], board)
+
+    print_solution_stats(solutions)
 
     with open("solutions.json", "w") as f:
         json.dump({"solutions": solutions, "board": board}, f)
@@ -53,12 +63,21 @@ def print_bulls_with_board(bulls, board):
         print(f"  {' '.join([str(x) for x in board[row]])}")
 
 
-def print_board():
+def print_board(board=board, end=""):
     print()
     for row in board:
         for col in row:
-            print(col, end="")
+            print(col, end=end)
         print()
+
+
+def print_solution_stats(solutions):
+    counts = get_solution_stats(solutions)
+    for k, v in counts.items():
+        print(f"({k}: {v})", end=" ")
+
+    map = get_solution_mask(solutions)
+    print_board(map, " ")
 
 
 ### SOLVER ###
@@ -86,7 +105,7 @@ def new_bull_sol():
     return [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 
 
-def solve_pensets(pen_sets: list[PenSet], limit=2):
+def solve_pensets(pen_sets: list[PenSet], limit=-1):
     # for each pen in pen sets, try out a pen,
     # and then solve the rest of them with the remaining of the pens
     # NOTE: this will get all rows and columns, just because there are 10 pens,
@@ -101,8 +120,8 @@ def solve_pensets(pen_sets: list[PenSet], limit=2):
         pen_idx, bull_sol = queue.popleft()
         if pen_idx == len(pen_sets):
             solutions.append(bull_sol)
-            # if len(solutions) >= limit:
-            #     break
+            if limit > 0 and len(solutions) >= limit:
+                break
             continue
 
         candidates = pen_sets[pen_idx]
@@ -127,6 +146,50 @@ def get_pen_sets(board: list[list[int]] = board):
             pen_sets[number].append((row, col))
 
     return pen_sets
+
+
+def get_solution_stats(solutions: list[list[list[int]]], board=board):
+    """
+    Gets the number of unique possible placements per set
+    - some tiles are just never valid, and will never lead to a solution
+    In other words, the number of tiles in each region where a bull hits that tile at least once in a solution
+
+    Could open up to: try targeting pens with the least number of "variance" (multiple bull placement solutions in a pen)
+    """
+    counts: dict[int, set[tuple[int, int]]] = {}
+
+    for solution in solutions:
+        for y in range(ROWS):
+            for x in range(COLS):
+                if solution[y][x] == BULL:
+                    color = board[y][x]
+                    if not color in counts:
+                        counts[color] = set()
+
+                    counts[color].add((y, x))
+
+    out = {}
+    for k, v in counts.items():
+        out[k] = len(v)
+
+    return out
+
+
+def get_solution_mask(solutions: list[list[list[int]]]):
+    """
+    Gets number of solutions where a bull is in that tile
+
+    Could open up to: try ceding bulls with more solutions/bulls with less solutions
+    """
+    counts = [[0 for _ in range(ROWS)] for _ in range(COLS)]
+
+    for solution in solutions:
+        for y in range(ROWS):
+            for x in range(COLS):
+                if solution[y][x] == BULL:
+                    counts[y][x] += 1
+
+    return counts
 
 
 ### BOARD GENERATOR ###
@@ -198,6 +261,19 @@ def floodfill_pen(color: int, stack: list[tuple[int, int]], board=board):
             return True
 
     return False
+
+
+#   ### BOARD FIXER ###
+# def fix_board(board: list[list[int]]):
+#     pensets = get_pen_sets(board)
+#     solutions
+
+#     stack = [pensets]
+
+#     while not board_unique(board):
+#         expand_penset(pensets[0])
+
+#     pass
 
 
 ### UTILITY ###

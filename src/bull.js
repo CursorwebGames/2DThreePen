@@ -12,7 +12,8 @@ class BullPen {
         if (MANUAL_BOARD) {
             // SET YOUR BOARD HERE
             this.board =
-                [[4, 4, 4, 5, 5, 5], [3, 4, 4, 5, 1, 1], [4, 4, 5, 5, 2, 1], [0, 4, 5, 2, 2, 1], [0, 0, 0, 2, 2, 2], [0, 2, 2, 2, 2, 2]];
+                genSolutions.board;
+            // [[3, 5, 5, 4, 4, 4], [3, 5, 5, 4, 4, 2], [3, 3, 5, 4, 4, 2], [1, 3, 3, 0, 2, 2], [1, 1, 0, 0, 2, 2], [1, 1, 0, 0, 0, 2]];
         }
 
         /**
@@ -26,7 +27,8 @@ class BullPen {
         }
 
         for (let i = 0; i < this.board.length; i++) {
-            this.colors.push(color(random(50, 255), random(50, 255), random(50, 255)));
+            const hue = map(i, 0, this.board.length, 0, 360);
+            this.colors.push(color(`hsl(${hue}, 80%, 60%)`));
         }
     }
 
