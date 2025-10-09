@@ -1,4 +1,6 @@
+from typing import Callable
 from main import get_pen_sets, PenSet, in_board, print_board
+
 
 Point = tuple[int, int]
 
@@ -46,7 +48,7 @@ def print_mask(mask=mask):
 
 
 ### WRAPPER OPT ###
-def opt(f):
+def opt(f: Callable[[PenSet], None]) -> Callable[[], None]:
     def wrap():
         for penset in pensets:
             f(penset)
