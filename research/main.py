@@ -126,14 +126,14 @@ def solve_pensets(pen_sets: list[PenSet], limit=-1):
     return solutions
 
 
-def get_pen_sets(board: list[list[int]] = board):
+def get_pen_sets(board: list[list[int]] = board, size=ROWS):
     """
     turn regions into a list of coords,
     `0: [# of cells in color 0], etc.`
     """
-    pen_sets: list[PenSet] = [[] for _ in range(ROWS)]
-    for row in range(ROWS):
-        for col in range(COLS):
+    pen_sets: list[PenSet] = [[] for _ in range(size)]
+    for row in range(size):
+        for col in range(size):
             number = board[row][col]
             pen_sets[number].append((row, col))
 
@@ -277,8 +277,8 @@ def next_directions(y: int, x: int):
     return o
 
 
-def in_board(y: int, x: int):
-    return y >= 0 and y < ROWS and x >= 0 and x < COLS
+def in_board(y: int, x: int, size=ROWS):
+    return y >= 0 and y < size and x >= 0 and x < size
 
 
 def valid_placement(row: int, col: int, bulls=bulls):
@@ -322,4 +322,5 @@ def check_bull_touch(y: int, x: int, bulls=bulls):
     return False
 
 
-main()
+if __name__ == "__main__":
+    main()

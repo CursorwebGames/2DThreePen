@@ -1,6 +1,9 @@
 # Threepen
 Like bullpen, but with three bulls, two bulls, one bull, zero bulls!
 
+## Strategy
+Create the bull pen hint maker: For each region, see where you can and cannot place bulls. (Make dots)
+
 ## Heuristics
 * Try generating with bias: make some spaces larger
     * Benchmark is average solution space **(lower better)**
