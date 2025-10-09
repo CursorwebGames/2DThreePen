@@ -1,8 +1,8 @@
 const RECT_SIZE = 50;
 const PADDING = 1;
 
-const REARRANGING_MODE = true; // rearrange the tiles
-const MANUAL_BOARD = false; // manually enter in board regions
+const REARRANGING_MODE = false; // rearrange the tiles
+const MANUAL_BOARD = true; // manually enter in board regions
 
 let pen;
 /** @type {{ solutions: any, solutionMask: any } & Solver} */
@@ -40,8 +40,16 @@ function draw() {
             fill(pen.colors[pen.board[y][x]] || 0);
             rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
 
-            if (solver.onesColor.has(pen.board[y][x])) {
-                line(rx, ry, rx + RECT_SIZE, ry + RECT_SIZE);
+            if (REARRANGING_MODE) {
+                if (solver.onesColor.has(pen.board[y][x])) {
+                    line(rx, ry, rx + RECT_SIZE, ry + RECT_SIZE);
+                }
+
+                push();
+                strokeWeight(2);
+                fill(255);
+                text(solver.solutionMask[y][x], rx + RECT_SIZE / 2, ry + RECT_SIZE / 2 + 10);
+                pop();
             }
 
             if (!REARRANGING_MODE) {
@@ -54,11 +62,6 @@ function draw() {
                 }
             }
 
-            push();
-            strokeWeight(2);
-            fill(255);
-            text(solver.solutionMask[y][x], rx + RECT_SIZE / 2, ry + RECT_SIZE / 2 + 10);
-            pop();
         }
     }
 }
