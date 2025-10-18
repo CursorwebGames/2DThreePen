@@ -5,12 +5,12 @@ from main import get_pen_sets, PenSet, in_board, print_board
 Point = tuple[int, int]
 
 board = [
-    [0, 0, 1, 1, 1, 1],
-    [0, 2, 1, 1, 3, 3],
-    [2, 2, 2, 1, 3, 3],
-    [2, 2, 5, 4, 3, 3],
-    [2, 4, 4, 4, 4, 3],
-    [4, 4, 4, 4, 4, 4],
+    [3, 3, 5, 5, 5, 4],
+    [3, 3, 1, 5, 5, 0],
+    [3, 3, 1, 1, 0, 0],
+    [3, 3, 1, 0, 0, 0],
+    [1, 1, 1, 0, 0, 0],
+    [2, 0, 0, 0, 0, 0],
 ]
 
 SIZE = len(board)
@@ -21,16 +21,11 @@ pensets = get_pen_sets(board, SIZE)
 
 
 def main():
-    single_pen()
-    one_direction()
-    penset_overlap()
-    one_direction()
-    one_direction()
-    single_pen()
-    one_direction()
-    penset_overlap()
-    one_direction()
-    one_direction()
+    functions = [single_pen, one_direction, pen_overlap]
+
+    for fn in functions:
+        print("running", fn)
+        fn()
 
     print_mask()
 
@@ -48,11 +43,14 @@ def print_mask(mask=mask):
 
 
 ### WRAPPER OPT ###
-def opt(f: Callable[[PenSet], None]) -> Callable[[], None]:
+def opt(f: Callable[[PenSet], bool]) -> Callable[[], None]:
     def wrap():
-        for penset in pensets:
-            f(penset)
-            readjust_pensets()
+        changed = False
+        while not changed:
+            for penset in pensets:
+                if f(penset):
+                    changed = True
+                readjust_pensets()
 
     return wrap
 
@@ -65,6 +63,9 @@ def single_pen(penset: PenSet):
         px, py = penset[0]
         for y, x in get_adjacent(px, py):
             mask.add((y, x))
+        return True
+
+    return False
 
 
 @opt
@@ -75,11 +76,14 @@ def one_direction(penset: PenSet):
 
     vert = penset_all_vert(penset)
 
+    changed = False
+
     if vert != None:
         x, color = vert
         for y in range(0, SIZE):
             if board[y][x] != color:
                 mask.add((y, x))
+        changed = True
 
     horiz = penset_all_horiz(penset)
 
@@ -88,10 +92,13 @@ def one_direction(penset: PenSet):
         for x in range(SIZE):
             if board[y][x] != color:
                 mask.add((y, x))
+        changed = True
+
+    return changed
 
 
 @opt
-def penset_overlap(penset: PenSet):
+def pen_overlap(penset: PenSet):
     global mask
     """
     if pen has <= 3 cells, there exists at least one cell
@@ -105,6 +112,10 @@ def penset_overlap(penset: PenSet):
             adjacents = set(get_adjacent(y, x))
             intersect &= adjacents
         mask |= intersect
+        if len(intersect) > 0:
+            return True
+
+    return False
 
 
 ### UTIL ###
