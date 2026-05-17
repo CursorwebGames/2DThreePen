@@ -15,3 +15,7 @@ Create the bull pen hint maker: For each region, see where you can and cannot pl
 * Try regenerating until # of solutions is less than 20
     * Percentage of boards with solutions > 20 and < 20
     * Benchmark is # of tries until 1 solution
+
+
+Useful: https://kris.pengy.ca/starbattle
+Game: https://starbattle.puzzlebaron.com/init.php

@@ -1,16 +1,40 @@
+from itertools import combinations
 from typing import Callable
 from main import get_pen_sets, PenSet, in_board, print_board
 
+import time
 
 Point = tuple[int, int]
 
+# board = [
+#     [3, 3, 5, 5, 5, 4],
+#     [3, 3, 1, 5, 5, 0],
+#     [3, 3, 1, 1, 0, 0],
+#     [3, 3, 1, 0, 0, 0],
+#     [1, 1, 1, 0, 0, 0],
+#     [2, 0, 0, 0, 0, 0],
+# ]
+
+# board = [
+#     [0, 1, 1, 2, 2, 2],
+#     [0, 3, 2, 2, 2, 2],
+#     [0, 3, 3, 2, 2, 2],
+#     [3, 3, 4, 2, 2, 2],
+#     [4, 4, 4, 5, 5, 5],
+#     [4, 4, 4, 4, 5, 5],
+# ]
+
 board = [
-    [3, 3, 5, 5, 5, 4],
-    [3, 3, 1, 5, 5, 0],
-    [3, 3, 1, 1, 0, 0],
-    [3, 3, 1, 0, 0, 0],
-    [1, 1, 1, 0, 0, 0],
-    [2, 0, 0, 0, 0, 0],
+    [0, 0, 1, 1, 1, 1, 2, 2, 2, 3],
+    [0, 1, 1, 1, 1, 1, 2, 2, 3, 3],
+    [0, 1, 0, 1, 1, 1, 1, 3, 3, 4],
+    [0, 0, 0, 1, 1, 5, 5, 5, 4, 4],
+    [6, 6, 0, 0, 5, 5, 5, 5, 4, 4],
+    [6, 6, 0, 0, 5, 7, 7, 7, 7, 8],
+    [6, 6, 6, 6, 5, 7, 7, 7, 8, 8],
+    [6, 6, 6, 9, 9, 9, 7, 7, 8, 8],
+    [6, 6, 6, 6, 9, 9, 9, 9, 8, 8],
+    [6, 6, 6, 6, 9, 9, 9, 9, 9, 8],
 ]
 
 SIZE = len(board)
@@ -21,11 +45,21 @@ pensets = get_pen_sets(board, SIZE)
 
 
 def main():
-    functions = [single_pen, one_direction, pen_overlap]
+    functions = [single_pen, one_direction, pen_overlap, overcounting]
 
-    for fn in functions:
-        print("running", fn)
-        fn()
+    print_mask()
+
+    iterations = 0
+    start = time.perf_counter()
+    while True:
+        for fn in functions:
+            fn()
+        iterations += 1
+        if len(mask) == SIZE**2 - SIZE:
+            break
+    end = time.perf_counter()
+    print(f"Elapsed time: {end - start:.4f} seconds")
+    print(f"Iterations: {iterations}")
 
     print_mask()
 
@@ -43,20 +77,26 @@ def print_mask(mask=mask):
 
 
 ### WRAPPER OPT ###
-def opt(f: Callable[[PenSet], bool]) -> Callable[[], None]:
-    def wrap():
-        changed = False
-        while not changed:
-            for penset in pensets:
-                if f(penset):
-                    changed = True
-                readjust_pensets()
+def opt(*, loop=True):
+    """Loop: whether to loop through each penset or not"""
 
-    return wrap
+    def decorator(f: Callable[[PenSet], bool]) -> Callable[[], None]:
+        def wrap():
+            if loop:
+                for penset in pensets:
+                    f(penset)
+            else:
+                f()
+
+            readjust_pensets()
+
+        return wrap
+
+    return decorator
 
 
 ### OPTIMIZATION "Optimizations": Places that pens cannot be ###
-@opt
+@opt()
 def single_pen(penset: PenSet):
     """Only one space is available"""
     if len(penset) == 1:
@@ -68,7 +108,7 @@ def single_pen(penset: PenSet):
     return False
 
 
-@opt
+@opt()
 def one_direction(penset: PenSet):
     """Cell is all vertical, etc."""
     yi, xi = (penset[0][0], penset[0][1])
@@ -97,7 +137,7 @@ def one_direction(penset: PenSet):
     return changed
 
 
-@opt
+@opt()
 def pen_overlap(penset: PenSet):
     global mask
     """
@@ -118,8 +158,47 @@ def pen_overlap(penset: PenSet):
     return False
 
 
+@opt(loop=False)
+def overcounting():
+    """
+    If K rows/cols contain cells from exactly K regions,
+    those regions' bulls must be in those rows/cols.
+    """
+    # algorithm: loop through # of rows, and check how many regions are present in those row subsections
+    # if row count == # of regions then we have overcounting, and block off rest of region
+    row_regions: list[set] = [set() for _ in range(SIZE)]
+    col_regions: list[set] = [set() for _ in range(SIZE)]
+    for ps in pensets:
+        for y, x in ps:
+            c = board[y][x]
+            row_regions[y].add(c)
+            col_regions[x].add(c)
+
+    for k in range(1, SIZE):
+        for row_subset in combinations(range(SIZE), k):
+            regions = set().union(*(row_regions[y] for y in row_subset))
+            if len(regions) == k:
+                row_set = set(row_subset)
+                for ps in pensets:
+                    if ps and board[ps[0][0]][ps[0][1]] in regions:
+                        for y, x in ps:
+                            if y not in row_set:
+                                mask.add((y, x))
+
+        for col_subset in combinations(range(SIZE), k):
+            regions = set().union(*(col_regions[x] for x in col_subset))
+            if len(regions) == k:
+                col_set = set(col_subset)
+                for ps in pensets:
+                    if ps and board[ps[0][0]][ps[0][1]] in regions:
+                        for y, x in ps:
+                            if x not in col_set:
+                                mask.add((y, x))
+
+
 ### UTIL ###
 def readjust_pensets():
+    """Readjust penset based on a mask"""
     for penset in pensets:
         for y, x in penset:
             if (y, x) in mask:
@@ -135,7 +214,7 @@ def get_adjacent(y: int, x: int):
                 continue
 
             point = (y + dy, x + dx)
-            if in_board(y, x, SIZE):
+            if in_board(y + dy, x + dx, SIZE):
                 out.append(point)
 
     return out

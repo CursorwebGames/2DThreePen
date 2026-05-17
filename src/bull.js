@@ -1,4 +1,4 @@
-const SIZE = 6;
+const SIZE = 10; // ??? TODO
 const BULL = 0;
 const DOT = 1;
 const EMPTY = -1;
@@ -11,8 +11,7 @@ class BullPen {
 
         if (MANUAL_BOARD) {
             // SET YOUR BOARD HERE
-            this.board =
-                badPen;
+            this.board = bigPen;
             // [[5, 5, 5, 4, 4, 4], [5, 3, 5, 5, 2, 4], [3, 3, 5, 0, 2, 4], [3, 1, 1, 0, 2, 2], [3, 3, 1, 0, 0, 2], [3, 3, 1, 0, 0, 2]];
             // genSolutions.board;
         }

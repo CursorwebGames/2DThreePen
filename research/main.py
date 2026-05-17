@@ -2,9 +2,10 @@ import random
 from collections import deque
 import copy
 import json
+import time
 
-ROWS = 15
-COLS = 15
+ROWS = 10  # 15
+COLS = 10  # 15
 
 BULL = 0
 EMPTY = -1
@@ -14,13 +15,30 @@ bulls = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 board = [[EMPTY for _ in range(ROWS)] for _ in range(COLS)]
 
 
+board = [
+    [0, 0, 1, 1, 1, 1, 2, 2, 2, 3],
+    [0, 1, 1, 1, 1, 1, 2, 2, 3, 3],
+    [0, 1, 0, 1, 1, 1, 1, 3, 3, 4],
+    [0, 0, 0, 1, 1, 5, 5, 5, 4, 4],
+    [6, 6, 0, 0, 5, 5, 5, 5, 4, 4],
+    [6, 6, 0, 0, 5, 7, 7, 7, 7, 8],
+    [6, 6, 6, 6, 5, 7, 7, 7, 8, 8],
+    [6, 6, 6, 9, 9, 9, 7, 7, 8, 8],
+    [6, 6, 6, 6, 9, 9, 9, 9, 8, 8],
+    [6, 6, 6, 6, 9, 9, 9, 9, 9, 8],
+]
+
+
 def main():
-    create_board()
+    # create_board()
 
     print_bulls()
     print_board()
 
+    start = time.perf_counter()
     solutions = solve_board()
+    end = time.perf_counter()
+    print(f"Elapsed time: {end - start:.4f} seconds")
 
     print(len(solutions), "solutions found")
     # print_bulls_with_board(solutions[0], board)
@@ -74,6 +92,7 @@ def print_solution_stats(solutions):
 
 ### SOLVER ###
 PenSet = list[tuple[int, int]]
+""" A region """
 
 
 def solve_board(board=board):
