@@ -17,6 +17,7 @@ class Solver:
         self.mask: set[Point] = set()
         self.pensets: list[PenSet] = self._get_pen_sets()
         self._solution: list[Point] = []
+        self.had_to_guess = False
 
     def solve(self) -> list[Point]:
         """Returns one bull position per region, or [] if unsolvable."""
@@ -77,8 +78,9 @@ class Solver:
             if len(self.mask) == self.SIZE**2 - self.SIZE:
                 return True
 
-        # Stuck — pick region with fewest candidates (MRV)
-        target = min(self.pensets, key=len)
+        # Stuck: pick region with fewest candidates (must have ≥2 to make a real choice)
+        self.had_to_guess = True
+        target = min((ps for ps in self.pensets if len(ps) >= 2), key=len)
 
         for y, x in list(target):
             saved_mask = set(self.mask)
@@ -227,14 +229,14 @@ class Solver:
 
 
 if __name__ == "__main__":
-    board = [
-        [3, 3, 5, 5, 5, 4],
-        [3, 3, 1, 5, 5, 0],
-        [3, 3, 1, 1, 0, 0],
-        [3, 3, 1, 0, 0, 0],
-        [1, 1, 1, 0, 0, 0],
-        [2, 0, 0, 0, 0, 0],
-    ]
+    # board = [
+    #     [3, 3, 5, 5, 5, 4],
+    #     [3, 3, 1, 5, 5, 0],
+    #     [3, 3, 1, 1, 0, 0],
+    #     [3, 3, 1, 0, 0, 0],
+    #     [1, 1, 1, 0, 0, 0],
+    #     [2, 0, 0, 0, 0, 0],
+    # ]
 
     # board = [
     #     [0, 1, 1, 2, 2, 2],
@@ -265,8 +267,20 @@ if __name__ == "__main__":
     #     [3, 3, 2, 2],
     # ]
 
+    board = [
+        [0, 0, 0, 1, 1, 1, 2, 2],
+        [0, 0, 0, 1, 1, 1, 1, 2],
+        [3, 0, 0, 0, 1, 2, 1, 2],
+        [3, 3, 0, 0, 2, 2, 2, 2],
+        [3, 3, 3, 0, 2, 2, 2, 4],
+        [3, 5, 5, 6, 6, 2, 4, 4],
+        [7, 7, 5, 6, 6, 4, 4, 4],
+        [5, 5, 5, 5, 4, 4, 4, 4],
+    ]
+
     solver = Solver(board)
-    # print(solver.solve())
+    solver.show_board()
     solver.solve()
     solver.show_board()
     solver.show_mask()
+    print("Had to guess?", solver.had_to_guess)
