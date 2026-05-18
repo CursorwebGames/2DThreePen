@@ -5,7 +5,7 @@ from typing import Optional
 
 from algox import AlgoXSolver
 
-SIZE = 6
+SIZE = 8
 
 Board = list[list[int]]
 

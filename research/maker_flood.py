@@ -5,10 +5,10 @@ from typing import Optional
 from algox import AlgoXSolver
 from maker import Board, SIZE, count_solutions, _a_star, show_board
 
-
 # ---------------------------------------------------------------------------
 # Random flood-fill: no star pre-placement, just N random seeds
 # ---------------------------------------------------------------------------
+
 
 def _random_flood_fill(size: int) -> Board:
     """Pick `size` random seed cells, grow regions via interleaved random BFS."""
@@ -52,13 +52,22 @@ def _random_flood_fill(size: int) -> Board:
 # Public API
 # ---------------------------------------------------------------------------
 
-def generate_puzzle(size: int = SIZE) -> Optional[Board]:
-    """Generate a board with exactly one solution via random flood-fill + A*."""
-    board = _random_flood_fill(size)
-    n = count_solutions(board)
-    if n == 1:
-        return board
-    return _a_star(board, size)
+
+def generate_puzzle(size: int = SIZE, max_attempts: int = 5) -> Optional[Board]:
+    """Generate a board with exactly one solution.
+
+    Each attempt flood-fills a fresh random board and runs A* for up to max_attempts
+    If cannot find one by then, try a different board.
+    """
+    for _ in range(max_attempts):
+        board = _random_flood_fill(size)
+        n = count_solutions(board)
+        if n == 1:
+            return board
+        result = _a_star(board, size, max_iter=20)
+        if result is not None:
+            return result
+    return None
 
 
 # ---------------------------------------------------------------------------
