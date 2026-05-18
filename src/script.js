@@ -108,6 +108,8 @@ function draw() {
                     fill(0);
                     circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 30, 30);
                 } else if (pen.bulls[y][x] == DOT) {
+                    fill(0, 0, 0, 120);
+                    rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
                     fill(123);
                     circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 10, 10);
                 }

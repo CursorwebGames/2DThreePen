@@ -198,15 +198,15 @@ if __name__ == "__main__":
             f"  AlgoX : {avg_ax:.3f} ms/run  unique={ax.has_unique_solution()}  solution={ax._solution}"
         )
 
-        # s = Solver(board)
-        # t2 = time.perf_counter()
-        # for _ in range(RUNS):
-        #     s = Solver(board)
-        #     s.solve()
-        # t3 = time.perf_counter()
-        # avg_s = (t3 - t2) / RUNS * 1000
-        # print(f"  Solver: {avg_s:.3f} ms/run  solution={s._solution}")
+        s = Solver(board)
+        t2 = time.perf_counter()
+        for _ in range(RUNS):
+            s = Solver(board)
+            s.solve()
+        t3 = time.perf_counter()
+        avg_s = (t3 - t2) / RUNS * 1000
+        print(f"  Solver: {avg_s:.3f} ms/run  solution={s._solution}")
 
-        # winner = "AlgoX" if avg_ax < avg_s else "Solver"
-        # ratio = max(avg_ax, avg_s) / min(avg_ax, avg_s)
-        # print(f"  → {winner} wins by {ratio:.1f}x")
+        winner = "AlgoX" if avg_ax < avg_s else "Solver"
+        ratio = max(avg_ax, avg_s) / min(avg_ax, avg_s)
+        print(f"  → {winner} wins by {ratio:.1f}x")

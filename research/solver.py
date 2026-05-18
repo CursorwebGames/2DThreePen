@@ -107,6 +107,7 @@ class Solver:
     # --- strategies ---
 
     def _single_pen(self):
+        """Only one space is available"""
         for penset in self.pensets:
             if len(penset) == 1:
                 for pt in self._get_adjacent(*penset[0]):
@@ -114,6 +115,7 @@ class Solver:
         self._readjust_pensets()
 
     def _one_direction(self):
+        """Cell is all vertical, etc."""
         for penset in self.pensets:
             if not penset:
                 continue
@@ -132,6 +134,10 @@ class Solver:
         self._readjust_pensets()
 
     def _pen_overlap(self):
+        """
+        if pen has <= 3 cells, there exists at least one cell
+        which can eliminate them all (i.e. that cell is invalid)
+        """
         for penset in self.pensets:
             if not penset or len(penset) > 8:
                 continue
@@ -142,6 +148,10 @@ class Solver:
         self._readjust_pensets()
 
     def _overcounting(self):
+        """
+        If K rows/cols contain cells from exactly K regions,
+        those regions' bulls must be in those rows/cols.
+        """
         SIZE = self.SIZE
         row_regions: list[set] = [set() for _ in range(SIZE)]
         col_regions: list[set] = [set() for _ in range(SIZE)]
@@ -229,6 +239,8 @@ class Solver:
 
 
 if __name__ == "__main__":
+    import time
+
     # board = [
     #     [3, 3, 5, 5, 5, 4],
     #     [3, 3, 1, 5, 5, 0],
@@ -267,6 +279,7 @@ if __name__ == "__main__":
     #     [3, 3, 2, 2],
     # ]
 
+    # did not need to guess
     # board = [
     #     [0, 0, 0, 1, 1, 1, 2, 2],
     #     [0, 0, 0, 1, 1, 1, 1, 2],
@@ -279,17 +292,22 @@ if __name__ == "__main__":
     # ]
 
     board = [
-        [0, 0, 0, 0, 3, 3],
-        [0, 0, 0, 2, 2, 3],
-        [0, 0, 2, 2, 3, 3],
-        [4, 4, 2, 2, 3, 3],
-        [5, 2, 2, 1, 1, 3],
-        [5, 1, 1, 1, 1, 1],
+        [6, 6, 6, 4, 4, 4, 0, 0],
+        [3, 6, 6, 6, 3, 4, 4, 0],
+        [3, 3, 3, 3, 3, 4, 4, 0],
+        [3, 3, 5, 5, 3, 2, 2, 2],
+        [5, 5, 5, 5, 5, 2, 2, 2],
+        [7, 7, 7, 7, 5, 1, 1, 1],
+        [7, 7, 7, 7, 1, 1, 1, 1],
+        [7, 7, 7, 7, 1, 1, 1, 1],
     ]
 
     solver = Solver(board)
     solver.show_board()
+    start = time.perf_counter()
     solver.solve()
+    end = time.perf_counter()
     solver.show_board()
     solver.show_mask()
+    print(f"Solved in {end - start:.4f} seconds")
     print("Had to guess?", solver.had_to_guess)

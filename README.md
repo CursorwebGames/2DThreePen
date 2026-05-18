@@ -4,17 +4,25 @@ Like bullpen, but with three bulls, two bulls, one bull, zero bulls!
 ## Strategy
 Create the bull pen hint maker: For each region, see where you can and cannot place bulls. (Make dots)
 
-## Heuristics
-* Try generating with bias: make some spaces larger
-    * Benchmark is average solution space **(lower better)**
-* Generate spaces first, and see if it is a valid bullpen
-    * Percentage of boards that have no solution
-    * Benchmark is average solution space
-* Fix board targeting large boxes vs small boxes
-    * Benchmark is # of tries until 1 solution
-* Try regenerating until # of solutions is less than 20
-    * Percentage of boards with solutions > 20 and < 20
-    * Benchmark is # of tries until 1 solution
+We call optimizations any deductions we make that reduce the region size (where the bull cannot be).
+
+Optimizations:
+* Single Pen (only one space is available)
+* One Direction (cell is all vertical)
+* Pen Overlap (there exists a cell that invalidates the entire region)
+* Overcounting (if k rows contains cells from exactly K regions, those regions' bulls must be in those rows/cols, and we can reduce the rest of the region)
+
+Future optimizations:
+* Improve Pen Overlap to include cells greater than 3
+* Add undercounting (if needed)
+
+## Generating Board
+* Randomly creating regions, and seeing if it contains bulls is faster than generating bulls and then creating regions
+* Use A* with number of solutions as heuristic
+    * Give up after several tries to avoid bottlenecks
+
+New heuristics to test:
+* Create preset regions (4x4 etc) to lower search space
 
 
 Useful: https://kris.pengy.ca/starbattle
