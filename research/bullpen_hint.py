@@ -37,6 +37,13 @@ board = [
     [6, 6, 6, 6, 9, 9, 9, 9, 9, 8],
 ]
 
+# board = [
+#     [0, 0, 1, 1],
+#     [0, 0, 1, 2],
+#     [3, 3, 1, 2],
+#     [3, 3, 2, 2],
+# ]
+
 SIZE = len(board)
 
 mask: set[Point] = set()
@@ -82,6 +89,7 @@ def opt(*, loop=True):
 
     def decorator(f: Callable[[PenSet], bool]) -> Callable[[], None]:
         def wrap():
+            # start = time.perf_counter()
             if loop:
                 for penset in pensets:
                     f(penset)
@@ -89,6 +97,8 @@ def opt(*, loop=True):
                 f()
 
             readjust_pensets()
+            # end = time.perf_counter()
+            # print(f"Elapsed time for {f}: {end - start:.4f} seconds")
 
         return wrap
 
@@ -164,36 +174,55 @@ def overcounting():
     If K rows/cols contain cells from exactly K regions,
     those regions' bulls must be in those rows/cols.
     """
-    # algorithm: loop through # of rows, and check how many regions are present in those row subsections
-    # if row count == # of regions then we have overcounting, and block off rest of region
     row_regions: list[set] = [set() for _ in range(SIZE)]
     col_regions: list[set] = [set() for _ in range(SIZE)]
+
+    color_to_ps: dict[int, PenSet] = {}
+
     for ps in pensets:
+        color = board[ps[0][0]][ps[0][1]]
+        color_to_ps[color] = ps
+
         for y, x in ps:
-            c = board[y][x]
-            row_regions[y].add(c)
-            col_regions[x].add(c)
+            row_regions[y].add(color)
+            col_regions[x].add(color)
 
     for k in range(1, SIZE):
         for row_subset in combinations(range(SIZE), k):
-            regions = set().union(*(row_regions[y] for y in row_subset))
-            if len(regions) == k:
-                row_set = set(row_subset)
-                for ps in pensets:
-                    if ps and board[ps[0][0]][ps[0][1]] in regions:
-                        for y, x in ps:
-                            if y not in row_set:
-                                mask.add((y, x))
+            regions = set()
+
+            for y in row_subset:
+                regions |= row_regions[y]
+
+                # early rejection
+                if len(regions) > k:
+                    break
+
+            if len(regions) != k:
+                continue
+
+            for color in regions:
+                for y, x in color_to_ps[color]:
+                    if y not in row_subset:
+                        mask.add((y, x))
 
         for col_subset in combinations(range(SIZE), k):
-            regions = set().union(*(col_regions[x] for x in col_subset))
-            if len(regions) == k:
-                col_set = set(col_subset)
-                for ps in pensets:
-                    if ps and board[ps[0][0]][ps[0][1]] in regions:
-                        for y, x in ps:
-                            if x not in col_set:
-                                mask.add((y, x))
+            regions = set()
+
+            for x in col_subset:
+                regions |= col_regions[x]
+
+                # early rejection
+                if len(regions) > k:
+                    break
+
+            if len(regions) != k:
+                continue
+
+            for color in regions:
+                for y, x in color_to_ps[color]:
+                    if x not in col_subset:
+                        mask.add((y, x))
 
 
 ### UTIL ###
