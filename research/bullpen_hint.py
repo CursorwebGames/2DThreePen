@@ -24,25 +24,25 @@ Point = tuple[int, int]
 #     [4, 4, 4, 4, 5, 5],
 # ]
 
-board = [
-    [0, 0, 1, 1, 1, 1, 2, 2, 2, 3],
-    [0, 1, 1, 1, 1, 1, 2, 2, 3, 3],
-    [0, 1, 0, 1, 1, 1, 1, 3, 3, 4],
-    [0, 0, 0, 1, 1, 5, 5, 5, 4, 4],
-    [6, 6, 0, 0, 5, 5, 5, 5, 4, 4],
-    [6, 6, 0, 0, 5, 7, 7, 7, 7, 8],
-    [6, 6, 6, 6, 5, 7, 7, 7, 8, 8],
-    [6, 6, 6, 9, 9, 9, 7, 7, 8, 8],
-    [6, 6, 6, 6, 9, 9, 9, 9, 8, 8],
-    [6, 6, 6, 6, 9, 9, 9, 9, 9, 8],
-]
-
 # board = [
-#     [0, 0, 1, 1],
-#     [0, 0, 1, 2],
-#     [3, 3, 1, 2],
-#     [3, 3, 2, 2],
+#     [0, 0, 1, 1, 1, 1, 2, 2, 2, 3],
+#     [0, 1, 1, 1, 1, 1, 2, 2, 3, 3],
+#     [0, 1, 0, 1, 1, 1, 1, 3, 3, 4],
+#     [0, 0, 0, 1, 1, 5, 5, 5, 4, 4],
+#     [6, 6, 0, 0, 5, 5, 5, 5, 4, 4],
+#     [6, 6, 0, 0, 5, 7, 7, 7, 7, 8],
+#     [6, 6, 6, 6, 5, 7, 7, 7, 8, 8],
+#     [6, 6, 6, 9, 9, 9, 7, 7, 8, 8],
+#     [6, 6, 6, 6, 9, 9, 9, 9, 8, 8],
+#     [6, 6, 6, 6, 9, 9, 9, 9, 9, 8],
 # ]
+
+board = [
+    [0, 0, 1, 1],
+    [0, 0, 1, 2],
+    [3, 3, 1, 2],
+    [3, 3, 2, 2],
+]
 
 SIZE = len(board)
 
@@ -52,22 +52,12 @@ pensets = get_pen_sets(board, SIZE)
 
 
 def main():
-    functions = [single_pen, one_direction, pen_overlap, overcounting]
-
     print_mask()
-
-    iterations = 0
     start = time.perf_counter()
-    while True:
-        for fn in functions:
-            fn()
-        iterations += 1
-        if len(mask) == SIZE**2 - SIZE:
-            break
+    solved = solve()
     end = time.perf_counter()
     print(f"Elapsed time: {end - start:.4f} seconds")
-    print(f"Iterations: {iterations}")
-
+    print(f"Solved: {solved}")
     print_mask()
 
 
@@ -223,6 +213,49 @@ def overcounting():
                 for y, x in color_to_ps[color]:
                     if x not in col_subset:
                         mask.add((y, x))
+
+
+functions = [single_pen, one_direction, pen_overlap, overcounting]
+
+
+def solve() -> bool:
+    """Constraint propagation until stuck, then backtrack."""
+    prev_size = -1
+    while len(mask) != prev_size:
+        prev_size = len(mask)
+        for fn in functions:
+            fn()
+        if any(len(ps) == 0 for ps in pensets):
+            return False
+        if len(mask) == SIZE**2 - SIZE:
+            return True
+
+    # Stuck: pick region with fewest candidates (MRV)
+    target = min(pensets, key=len)
+
+    for y, x in list(target):
+        saved_mask = set(mask)
+        saved_pensets = [list(ps) for ps in pensets]
+
+        # Place bull at (y, x): mask rest of region and all adjacent cells
+        for cy, cx in list(target):
+            if (cy, cx) != (y, x):
+                mask.add((cy, cx))
+        for ay, ax in get_adjacent(y, x):
+            mask.add((ay, ax))
+        readjust_pensets()
+
+        if solve():
+            return True
+
+        # Backtrack
+        mask.clear()
+        mask.update(saved_mask)
+        for i, ps in enumerate(pensets):
+            ps.clear()
+            ps.extend(saved_pensets[i])
+
+    return False
 
 
 ### UTIL ###
