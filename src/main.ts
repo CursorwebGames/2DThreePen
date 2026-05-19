@@ -14,6 +14,7 @@ window.setup = () => {
     parent.addEventListener("contextmenu", e => e.preventDefault());
     createCanvas(50 * 8 + 4, 50 * 8 + 4).parent(parent);
     pen = new BullPen();
+    pen.onBoardChange = () => { solver = new Solver(pen); };
     solver = new Solver(pen);
     gen = new PenGenerator(8);
 };
@@ -39,6 +40,15 @@ window.mouseClicked = () => {
     pen.mouseClicked();
 };
 
+(document.querySelector(".undo") as HTMLButtonElement).addEventListener("click", () => pen.undo());
+(document.querySelector(".redo") as HTMLButtonElement).addEventListener("click", () => pen.redo());
+(document.querySelector(".clear") as HTMLButtonElement).addEventListener("click", () => pen.clear());
+
+document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.key == "z" && !e.shiftKey) { e.preventDefault(); pen.undo(); }
+    else if (e.ctrlKey && (e.key == "y" || e.key == "Z")) { e.preventDefault(); pen.redo(); }
+});
+
 (document.querySelector(".hint") as HTMLButtonElement).addEventListener("click", () => {
     let x = solver.nextHint();
     if (!x) return;
@@ -53,5 +63,4 @@ window.mouseClicked = () => {
         board = gen.generate();
     }
     pen.setBoard(board);
-    solver = new Solver(pen);
 });

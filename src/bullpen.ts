@@ -9,17 +9,24 @@ const PADDING = 1;
 
 const MOBILE = true;
 
+type Mask = typeof BULL | typeof EMPTY | typeof DOT;
+
 export class BullPen {
     board: number[][];
     colors: p5.Color[] = [];
     size: number;
 
+    onBoardChange!: () => void;
+
+    private undoStack: Mask[][][] = [];
+    private redoStack: Mask[][][] = [];
+    private _beforeSnapshot: Mask[][] | null = null;
+
     private dragMode: typeof DOT | typeof EMPTY | null = null;
     private hasDragged = false;
     private pressedButton: 'left' | 'right' | null = null;
 
-    /** True: there is a dot */
-    mask: (typeof BULL | typeof EMPTY | typeof DOT)[][];
+    mask: (Mask)[][];
 
     constructor() {
         this.board = `
@@ -82,10 +89,39 @@ export class BullPen {
         return null;
     }
 
+    private copyMask(): Mask[][] {
+        return this.mask.map(row => [...row]) as Mask[][];
+    }
+
+    private pushUndo(snapshot: Mask[][]) {
+        this.undoStack.push(snapshot);
+        if (this.undoStack.length > 50) this.undoStack.shift();
+        this.redoStack = [];
+    }
+
+    undo() {
+        if (!this.undoStack.length) return;
+        this.redoStack.push(this.copyMask());
+        this.mask = this.undoStack.pop()!;
+    }
+
+    redo() {
+        if (!this.redoStack.length) return;
+        this.undoStack.push(this.copyMask());
+        this.mask = this.redoStack.pop()!;
+    }
+
+    clear() {
+        this.pushUndo(this.copyMask());
+        this.mask = Array.from({ length: this.size }, () => Array(this.size).fill(EMPTY));
+    }
+
     addDots(dots: Point[]) {
+        const snapshot = this.copyMask();
         for (const [y, x] of dots) {
             this.mask[y][x] = DOT;
         }
+        this.pushUndo(snapshot);
     }
 
     setBoard(board: number[][]) {
@@ -95,11 +131,15 @@ export class BullPen {
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
         this.colors = [];
+        this.undoStack = [];
+        this.redoStack = [];
 
         for (let i = 0; i < this.board.length; i++) {
             const hue = floor(map(i, 0, size, 0, 360));
             this.colors.push(color(`hsl(${hue}, 80%, 60%)`));
         }
+
+        this.onBoardChange();
     }
 
     mouseDragged() {
@@ -127,10 +167,12 @@ export class BullPen {
     mousePressed() {
         this.hasDragged = false;
         this.dragMode = null;
+        this._beforeSnapshot = this.copyMask();
         this.pressedButton = mouseButton.left ? 'left' : mouseButton.right ? 'right' : null;
     }
 
     mouseReleased() {
+        if (this.hasDragged) this.pushUndo(this._beforeSnapshot!);
         this.dragMode = null;
     }
 
@@ -141,6 +183,7 @@ export class BullPen {
         if (!cell) return;
         const { x, y } = cell;
         const cur = this.mask[y][x];
+        this.pushUndo(this._beforeSnapshot!);
         if (MOBILE) {
             if (cur == EMPTY) this.mask[y][x] = DOT;
             else if (cur == DOT) this.mask[y][x] = BULL;
