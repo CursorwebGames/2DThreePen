@@ -1,3 +1,5 @@
+import type { Point } from "./solver";
+
 const BULL = 0;
 const EMPTY = -1;
 const DOT = 1;
@@ -80,6 +82,12 @@ export class BullPen {
             return { x, y };
         }
         return null;
+    }
+
+    addDots(dots: Point[]) {
+        for (const [y, x] of dots) {
+            this.mask[y][x] = DOT;
+        }
     }
 
     mouseDragged() {
