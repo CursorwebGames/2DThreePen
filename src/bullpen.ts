@@ -40,8 +40,6 @@ export class BullPen {
             const hue = floor(map(i, 0, size, 0, 360));
             this.colors.push(color(`hsl(${hue}, 80%, 60%)`));
         }
-
-        this.mask[0][0] = BULL;
     }
 
     draw() {
@@ -87,6 +85,20 @@ export class BullPen {
     addDots(dots: Point[]) {
         for (const [y, x] of dots) {
             this.mask[y][x] = DOT;
+        }
+    }
+
+    setBoard(board: number[][]) {
+        this.board = board;
+        const size = this.board.length;
+        this.size = size;
+
+        this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
+        this.colors = [];
+
+        for (let i = 0; i < this.board.length; i++) {
+            const hue = floor(map(i, 0, size, 0, 360));
+            this.colors.push(color(`hsl(${hue}, 80%, 60%)`));
         }
     }
 
