@@ -126,17 +126,28 @@ export class Solver {
         for (const penset of this.regions) {
             if (!penset.length) continue;
             const vert = this.pensetAllVert(penset);
+            let changed = false;
             if (vert != null) {
                 const [x, color] = vert;
                 for (let y = 0; y < this.size; y++) {
-                    if (this.board[y][x] != color) this.mask.add(hashPt(y, x));
+                    if (this.board[y][x] != color) {
+                        this.mask.add(hashPt(y, x));
+                        changed = true;
+                    }
                 }
             }
+
+            if (changed) {
+                break;
+            }
+
             const horiz = this.pensetAllHoriz(penset);
             if (horiz != null) {
                 const [y, color] = horiz;
                 for (let x = 0; x < this.size; x++) {
-                    if (this.board[y][x] != color) this.mask.add(hashPt(y, x));
+                    if (this.board[y][x] != color) {
+                        this.mask.add(hashPt(y, x));
+                    }
                 }
             }
         }
@@ -155,6 +166,7 @@ export class Solver {
                     if (!adj.has(k)) intersect.delete(k);
                 }
             }
+
             for (const k of intersect) this.mask.add(k);
         }
         this.readjustRegions();
@@ -178,6 +190,7 @@ export class Solver {
 
         const indices = Array.from({ length: SIZE }, (_, i) => i);
         for (let k = 1; k < SIZE; k++) {
+            let changed = false;
             for (const rowSubset of combinations(indices, k)) {
                 const regions = new Set<number>();
                 let tooMany = false;
@@ -188,9 +201,16 @@ export class Solver {
                 if (tooMany || regions.size != k) continue;
                 for (const color of regions) {
                     for (const [y, x] of colorToPs.get(color)!) {
-                        if (!rowSubset.includes(y)) this.mask.add(hashPt(y, x));
+                        if (!rowSubset.includes(y)) {
+                            this.mask.add(hashPt(y, x));
+                            changed = true;
+                        }
                     }
                 }
+            }
+
+            if (changed) {
+                break;
             }
 
             for (const colSubset of combinations(indices, k)) {
