@@ -16,7 +16,7 @@ window.setup = () => {
     pen = new BullPen();
     pen.onBoardChange = () => { solver = new Solver(pen); };
     solver = new Solver(pen);
-    gen = new PenGenerator(8);
+    gen = new PenGenerator(6);
 };
 
 window.draw = () => {
@@ -59,8 +59,12 @@ document.addEventListener("keydown", (e) => {
 
 (document.querySelector(".gen") as HTMLButtonElement).addEventListener("click", () => {
     let board: number[][] | null = null;
-    while (!board) {
-        board = gen.generate();
+    // while (!board) {
+    board = gen.generate();
+    // }
+    if (!board) {
+        console.log('failed, try again');
+        return;
     }
     pen.setBoard(board);
 });

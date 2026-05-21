@@ -28,7 +28,7 @@ function heapPush(heap: HeapEntry[], entry: HeapEntry): void {
     heap.push(entry);
     let i = heap.length - 1;
     while (i > 0) {
-        const parent = (i - 1) >> 1;
+        const parent = (i - 1) >> 1; // 2 to the power of
         if (heap[parent][0] <= heap[i][0]) break;
         [heap[parent], heap[i]] = [heap[i], heap[parent]];
         i = parent;
@@ -70,8 +70,9 @@ export class PenGenerator {
             const board = this.randomFloodFill();
             const n = this.countSolutions(board);
             if (n == 1) return board;
-            const result = this.aStar(board, 20);
+            const result = this.aStar(board);
             if (result != null) return result;
+            console.log('attempt', attempt, 'failed');
         }
         return null;
     }
@@ -194,7 +195,7 @@ export class PenGenerator {
         return true;
     }
 
-    private neighbours(board: Board): Board[] {
+    private neighbors(board: Board): Board[] {
         const { size } = this;
         const result: Board[] = [];
         const seen = new Set<string>();
@@ -222,7 +223,7 @@ export class PenGenerator {
         return result;
     }
 
-    private aStar(start: Board, maxIter: number): Board | null {
+    private aStar(start: Board, maxIter: number = 20): Board | null {
         const h0 = this.countSolutions(start);
         if (h0 == 1) return start;
 
@@ -234,9 +235,9 @@ export class PenGenerator {
 
         for (let iter = 0; iter < maxIter; iter++) {
             if (!heap.length) break;
-            const [, g, , board] = heapPop(heap);
+            const [_, g, _1, board] = heapPop(heap);
 
-            for (const nb of this.neighbours(board)) {
+            for (const nb of this.neighbors(board)) {
                 const h = this.countSolutions(nb);
                 if (h == 1) return nb;
                 if (h == 0) continue;
