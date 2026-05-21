@@ -4,7 +4,7 @@ const BULL = 0;
 const EMPTY = -1;
 const DOT = 1;
 
-const RECT_SIZE = 50;
+// const RECT_SIZE = 50;
 const PADDING = 1;
 
 const MOBILE = true;
@@ -15,6 +15,7 @@ export class BullPen {
     board: number[][];
     colors: p5.Color[] = [];
     size: number;
+    rectSize: number;
 
     onBoardChange!: () => void;
 
@@ -40,6 +41,7 @@ export class BullPen {
 7 7 7 7 1 1 1 1`.trim().split('\n').map(x => x.split(' ').map(Number));
         const size = this.board.length;
         this.size = size;
+        this.rectSize = 50 * 8 / this.size;
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
 
@@ -51,29 +53,29 @@ export class BullPen {
 
     draw() {
         noStroke();
-        textSize(RECT_SIZE - 10);
+        textSize(this.rectSize - 10);
         textAlign(CENTER, CENTER);
         for (let y = 0; y < this.mask.length; y++) {
             for (let x = 0; x < this.mask[0].length; x++) {
-                const rx = (RECT_SIZE + PADDING / 2) * x;
-                const ry = (RECT_SIZE + PADDING / 2) * y;
+                const rx = (this.rectSize + PADDING / 2) * x;
+                const ry = (this.rectSize + PADDING / 2) * y;
 
                 const cellColor = this.colors[this.board[y][x]];
 
                 fill(cellColor);
-                rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
+                rect(rx, ry, this.rectSize, this.rectSize, 2);
 
                 const cell = this.mask[y][x];
                 if (cell == BULL) {
                     fill(255);
-                    circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 45);
-                    text("🦀", rx + RECT_SIZE / 2, ry + RECT_SIZE / 2);
+                    circle(rx + this.rectSize / 2, ry + this.rectSize / 2, 45);
+                    text("🦀", rx + this.rectSize / 2, ry + this.rectSize / 2);
                 } else if (cell == DOT) {
                     noStroke();
                     fill(0, 0, 0, 120);
-                    rect(rx, ry, RECT_SIZE, RECT_SIZE, 2);
+                    rect(rx, ry, this.rectSize, this.rectSize, 2);
                     fill(cellColor);
-                    circle(rx + RECT_SIZE / 2, ry + RECT_SIZE / 2, 10);
+                    circle(rx + this.rectSize / 2, ry + this.rectSize / 2, 10);
                 }
             }
         }
@@ -81,8 +83,8 @@ export class BullPen {
     }
 
     private cellAt(mx: number, my: number): { x: number; y: number } | null {
-        const x = Math.floor(mx / (RECT_SIZE + PADDING / 2));
-        const y = Math.floor(my / (RECT_SIZE + PADDING / 2));
+        const x = Math.floor(mx / (this.rectSize + PADDING / 2));
+        const y = Math.floor(my / (this.rectSize + PADDING / 2));
         if (x >= 0 && x < this.mask[0].length && y >= 0 && y < this.mask.length) {
             return { x, y };
         }
@@ -128,6 +130,7 @@ export class BullPen {
         this.board = board;
         const size = this.board.length;
         this.size = size;
+        this.rectSize = 50 * 8 / this.size;
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
         this.colors = [];

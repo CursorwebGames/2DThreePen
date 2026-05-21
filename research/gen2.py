@@ -12,8 +12,8 @@ SIZE = 8
 # ---------------------------------------------------------------------------
 
 
-NUM_CAPPED = (5, 7)  # (min, max) number of small regions per board
-CAP_SIZE = (1, 3)  # (min, max) cell count for each small region
+NUM_CAPPED = (5, 7)  # number of small regions per board
+CAP_SIZE = (1, 3)  # cell count for each small region
 
 
 def _random_flood_fill(
@@ -138,3 +138,28 @@ if __name__ == "__main__":
         solver.solve()
         print(f"unique: {solver.has_unique_solution()}")
         break
+
+# if __name__ == "__main__":
+#     import time
+
+#     time_sum = 0
+#     count = 100
+
+#     for i in range(count):
+#         t0 = time.perf_counter()
+#         for attempt in range(1, 21):
+#             puzzle = generate_puzzle(SIZE)
+
+#             if puzzle is not None:
+#                 break
+#         elapsed = (time.perf_counter() - t0) * 1000
+#         time_sum += elapsed
+
+#     print("NUM_CAP:", NUM_CAPPED, "CAP_SIZE:", CAP_SIZE)
+#     print(f"Average time: {time_sum / count:.0f}ms/{count}its")
+
+#     # NUM_CAP: (1, 5) CAP_SIZE: (2, 3)
+#     # Average time: 265ms
+
+#     # NUM_CAP: (5, 7) CAP_SIZE: (1, 3)
+#     # Average time: 97ms

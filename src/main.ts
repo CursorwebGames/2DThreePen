@@ -57,6 +57,10 @@ document.addEventListener("keydown", (e) => {
     pen.addDots(dots);
 });
 
+(document.querySelector(".export") as HTMLButtonElement).addEventListener("click", () => {
+    console.log(JSON.stringify(pen.board));
+});
+
 (document.querySelector(".gen") as HTMLButtonElement).addEventListener("click", () => {
     let board: number[][] | null = null;
     // while (!board) {
