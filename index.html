@@ -6,14 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CrabPen</title>
     <link rel="stylesheet" href="style.css">
-    <script src="solutions.js"></script>
 </head>
 
 <body>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.min.js"></script>
-    <script src="src/bull.js"></script>
-    <script src="src/solver.js"></script>
-    <script src="src/script.js"></script>
+    <button class="undo">Undo</button>
+    <button class="redo">Redo</button>
+    <button class="clear">Clear</button>
+    <div class="canvas"></div>
+    <button class="hint">Get Hint</button>
+    <button class="gen">New Puzzle</button>
+    <button class="export">Export Puzzle</button>
+    <div class="hint-desc"></div>
+    <script type="module" src="/src/main.ts"></script>
 </body>
 
 </html>
