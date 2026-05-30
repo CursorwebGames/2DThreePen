@@ -36,10 +36,6 @@ window.mouseReleased = () => {
     pen.mouseReleased();
 };
 
-window.mouseClicked = () => {
-    pen.mouseClicked();
-};
-
 (document.querySelector(".undo") as HTMLButtonElement).addEventListener("click", () => pen.undo());
 (document.querySelector(".redo") as HTMLButtonElement).addEventListener("click", () => pen.redo());
 (document.querySelector(".clear") as HTMLButtonElement).addEventListener("click", () => pen.clear());

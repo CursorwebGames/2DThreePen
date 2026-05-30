@@ -25,7 +25,7 @@ export class BullPen {
 
     private dragMode: typeof DOT | typeof EMPTY | null = null;
     private hasDragged = false;
-    private pressedButton: 'left' | 'right' | null = null;
+    private pressedCell: { x: number; y: number } | null = null;
 
     mask: (Mask)[][];
 
@@ -146,53 +146,50 @@ export class BullPen {
     }
 
     mouseDragged() {
-        if (!MOBILE && this.pressedButton != 'right') return;
-        this.hasDragged = true;
+        if (!MOBILE && !mouseButton.right) return;
         const cell = this.cellAt(mouseX, mouseY);
         if (!cell) return;
         const { x, y } = cell;
-
-        if (this.dragMode == null) {
-            this.dragMode = this.mask[y][x] == DOT ? EMPTY : DOT;
+        const pc = this.pressedCell;
+        if (!this.hasDragged && pc && (cell.x != pc.x || cell.y != pc.y)) {
+            this.hasDragged = true;
         }
+        if (!this.hasDragged) return;
+        this.applyDrag(x, y);
+    }
 
+    private applyDrag(x: number, y: number) {
         if (this.dragMode == DOT) {
-            if (this.mask[y][x] == EMPTY) {
-                this.mask[y][x] = DOT;
-            }
-        } else { // dragMode == EMPTY
-            if (this.mask[y][x] != BULL) {
-                this.mask[y][x] = EMPTY;
-            }
+            if (this.mask[y][x] == EMPTY) this.mask[y][x] = DOT;
+        } else {
+            if (this.mask[y][x] != BULL) this.mask[y][x] = EMPTY;
         }
     }
 
     mousePressed() {
         this.hasDragged = false;
-        this.dragMode = null;
         this._beforeSnapshot = this.copyMask();
-        this.pressedButton = mouseButton.left ? 'left' : mouseButton.right ? 'right' : null;
-    }
-
-    mouseReleased() {
-        if (this.hasDragged) this.pushUndo(this._beforeSnapshot!);
-        this.dragMode = null;
-    }
-
-    mouseClicked() {
-        if (!MOBILE && this.pressedButton != 'left') return;
-        if (this.hasDragged) return;
         const cell = this.cellAt(mouseX, mouseY);
+        this.pressedCell = cell;
         if (!cell) return;
         const { x, y } = cell;
         const cur = this.mask[y][x];
-        this.pushUndo(this._beforeSnapshot!);
+        this.dragMode = cur == DOT ? EMPTY : DOT;
         if (MOBILE) {
             if (cur == EMPTY) this.mask[y][x] = DOT;
             else if (cur == DOT) this.mask[y][x] = BULL;
             else this.mask[y][x] = EMPTY;
-        } else {
+        } else if (mouseButton.left) {
+            if (cur == EMPTY) this.mask[y][x] = DOT;
+            else if (cur == DOT) this.mask[y][x] = BULL;
+            else this.mask[y][x] = EMPTY;
+        } else if (mouseButton.right) {
             this.mask[y][x] = cur == BULL ? EMPTY : BULL;
         }
+    }
+
+    mouseReleased() {
+        if (this.pressedCell) this.pushUndo(this._beforeSnapshot!);
+        this.dragMode = null;
     }
 }
