@@ -20,7 +20,7 @@ window.setup = () => {
 };
 
 window.draw = () => {
-    background(255);
+    background(222);
     pen.draw();
 };
 
