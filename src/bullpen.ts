@@ -175,21 +175,29 @@ export class BullPen {
         const { x, y } = cell;
         const cur = this.mask[y][x];
         this.dragMode = cur == DOT ? EMPTY : DOT;
-        if (MOBILE) {
-            if (cur == EMPTY) this.mask[y][x] = DOT;
-            else if (cur == DOT) this.mask[y][x] = BULL;
-            else this.mask[y][x] = EMPTY;
-        } else if (mouseButton.left) {
-            if (cur == EMPTY) this.mask[y][x] = DOT;
-            else if (cur == DOT) this.mask[y][x] = BULL;
-            else this.mask[y][x] = EMPTY;
-        } else if (mouseButton.right) {
-            this.mask[y][x] = cur == BULL ? EMPTY : BULL;
-        }
+        this.applyDrag(x, y); // immediate feedback; reverted on release if no drag
     }
 
     mouseReleased() {
-        if (this.pressedCell) this.pushUndo(this._beforeSnapshot!);
+        if (this.hasDragged) {
+            this.pushUndo(this._beforeSnapshot!);
+        } else if (this.pressedCell) {
+            const { x, y } = this.pressedCell;
+            const cur = this._beforeSnapshot![y][x];
+            this.mask = this._beforeSnapshot!.map(row => [...row]) as Mask[][];
+            if (MOBILE) {
+                if (cur == EMPTY) this.mask[y][x] = DOT;
+                else if (cur == DOT) this.mask[y][x] = BULL;
+                else this.mask[y][x] = EMPTY;
+            } else if (mouseButton.left) {
+                if (cur == EMPTY) this.mask[y][x] = DOT;
+                else if (cur == DOT) this.mask[y][x] = BULL;
+                else this.mask[y][x] = EMPTY;
+            } else if (mouseButton.right) {
+                this.mask[y][x] = cur == BULL ? EMPTY : BULL;
+            }
+            this.pushUndo(this._beforeSnapshot!);
+        }
         this.dragMode = null;
     }
 }
