@@ -1,5 +1,5 @@
 import "p5";
-import { BullPen } from "./bullpen";
+import { BullPen, REGION_BORDER } from "./bullpen";
 import { Solver } from "./solver";
 import { PenGenerator } from "./genpen";
 
@@ -12,7 +12,7 @@ const hintDesc = document.querySelector(".hint-desc") as HTMLDivElement;
 window.setup = () => {
     const parent = document.querySelector(".canvas")!;
     parent.addEventListener("contextmenu", e => e.preventDefault());
-    createCanvas(50 * 8 + 4, 50 * 8 + 4).parent(parent);
+    createCanvas(50 * 8 + 2 * REGION_BORDER, 50 * 8 + 2 * REGION_BORDER).parent(parent);
     pen = new BullPen();
     pen.onBoardChange = () => { solver = new Solver(pen); };
     solver = new Solver(pen);
@@ -20,7 +20,7 @@ window.setup = () => {
 };
 
 window.draw = () => {
-    background(0);
+    background(222);
     pen.draw();
 };
 

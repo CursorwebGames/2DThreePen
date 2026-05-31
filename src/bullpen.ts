@@ -6,8 +6,7 @@ const DOT = 1;
 
 // const RECT_SIZE = 50;
 const PADDING = 1;
-
-const MOBILE = true;
+export const REGION_BORDER = 3;
 
 type Mask = typeof BULL | typeof EMPTY | typeof DOT;
 
@@ -18,10 +17,12 @@ export class BullPen {
     rectSize: number;
 
     onBoardChange!: () => void;
+    onComplete!: () => void;
 
     private undoStack: Mask[][][] = [];
     private redoStack: Mask[][][] = [];
-    private _beforeSnapshot: Mask[][] | null = null;
+    /** Snapshot to keep track of undo stack */
+    private beforeSnapshot: Mask[][] | null = null;
 
     private dragMode: typeof DOT | typeof EMPTY | null = null;
     private hasDragged = false;
@@ -41,7 +42,7 @@ export class BullPen {
 7 7 7 7 1 1 1 1`.trim().split('\n').map(x => x.split(' ').map(Number));
         const size = this.board.length;
         this.size = size;
-        this.rectSize = 50 * 8 / this.size;
+        this.rectSize = (50 * 8) / this.size;
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
 
@@ -52,39 +53,89 @@ export class BullPen {
     }
 
     draw() {
-        noStroke();
+        push();
+        translate(REGION_BORDER, REGION_BORDER);
         textSize(this.rectSize - 10);
         textAlign(CENTER, CENTER);
         for (let y = 0; y < this.mask.length; y++) {
             for (let x = 0; x < this.mask[0].length; x++) {
-                const rx = (this.rectSize + PADDING / 2) * x;
-                const ry = (this.rectSize + PADDING / 2) * y;
+                const rx = this.rectSize * x;
+                const ry = this.rectSize * y;
 
                 const cellColor = this.colors[this.board[y][x]];
+                const darkColor = lerpColor(cellColor, color(0), 0.2);
 
+                noStroke();
+                fill(darkColor);
+                rect(rx, ry, this.rectSize, this.rectSize);
+                strokeWeight(1);
                 fill(cellColor);
-                rect(rx, ry, this.rectSize, this.rectSize, 2);
+                stroke(darkColor);
+                rect(rx, ry, this.rectSize, this.rectSize, 4);
 
                 const cell = this.mask[y][x];
                 if (cell == BULL) {
                     fill(255);
                     circle(rx + this.rectSize / 2, ry + this.rectSize / 2, 45);
                     text("🦀", rx + this.rectSize / 2, ry + this.rectSize / 2);
-                } else if (cell == DOT) {
+                }
+            }
+        }
+
+        // border and dots (they need to be overlayed)
+        strokeCap(ROUND);
+        for (let y = 0; y < this.mask.length; y++) {
+            for (let x = 0; x < this.mask[0].length; x++) {
+                const rx = this.rectSize * x;
+                const ry = this.rectSize * y;
+
+                stroke(0);
+                strokeWeight(REGION_BORDER);
+                const regionId = this.board[y][x];
+
+                // right
+                if (x + 1 >= this.mask[0].length || this.board[y][x + 1] != regionId) {
+                    line(rx + this.rectSize, ry, rx + this.rectSize, ry + this.rectSize);
+                }
+
+                // bottom
+                if (y + 1 >= this.mask.length || this.board[y + 1][x] != regionId) {
+                    line(rx, ry + this.rectSize, rx + this.rectSize, ry + this.rectSize);
+                }
+
+                // left
+                if (x - 1 < 0 || this.board[y][x - 1] != regionId) {
+                    line(rx, ry, rx, ry + this.rectSize);
+                }
+
+                // top
+                if (y - 1 < 0 || this.board[y - 1][x] != regionId) {
+                    line(rx, ry, rx + this.rectSize, ry);
+                }
+
+                noStroke();
+
+                const cell = this.mask[y][x];
+                const cellColor = this.colors[this.board[y][x]];
+                if (cell == DOT) {
                     noStroke();
-                    fill(0, 0, 0, 120);
-                    rect(rx, ry, this.rectSize, this.rectSize, 2);
+                    fill(0, 0, 0, 125);
+                    rect(rx, ry, this.rectSize, this.rectSize);
                     fill(cellColor);
                     circle(rx + this.rectSize / 2, ry + this.rectSize / 2, 10);
                 }
             }
         }
+        pop();
+    }
 
+    checkBoard() {
+        // todo: check for invalid bulls, check if it is all valid (do onComplete)
     }
 
     private cellAt(mx: number, my: number): { x: number; y: number } | null {
-        const x = Math.floor(mx / (this.rectSize + PADDING / 2));
-        const y = Math.floor(my / (this.rectSize + PADDING / 2));
+        const x = Math.floor((mx - REGION_BORDER) / (this.rectSize + PADDING / 2));
+        const y = Math.floor((my - REGION_BORDER) / (this.rectSize + PADDING / 2));
         if (x >= 0 && x < this.mask[0].length && y >= 0 && y < this.mask.length) {
             return { x, y };
         }
@@ -118,6 +169,10 @@ export class BullPen {
         this.mask = Array.from({ length: this.size }, () => Array(this.size).fill(EMPTY));
     }
 
+    /**
+     * External function to add dots (from hint)
+     * @todo extend to bulls too
+     */
     addDots(dots: Point[]) {
         const snapshot = this.copyMask();
         for (const [y, x] of dots) {
@@ -126,11 +181,14 @@ export class BullPen {
         this.pushUndo(snapshot);
     }
 
+    /**
+     * Set board with new puzzle
+     */
     setBoard(board: number[][]) {
         this.board = board;
         const size = this.board.length;
         this.size = size;
-        this.rectSize = 50 * 8 / this.size;
+        this.rectSize = (50 * 8 - 2 * REGION_BORDER) / this.size;
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
         this.colors = [];
@@ -146,7 +204,6 @@ export class BullPen {
     }
 
     mouseDragged() {
-        if (!MOBILE && !mouseButton.right) return;
         const cell = this.cellAt(mouseX, mouseY);
         if (!cell) return;
         const { x, y } = cell;
@@ -168,28 +225,29 @@ export class BullPen {
 
     mousePressed() {
         this.hasDragged = false;
-        this._beforeSnapshot = this.copyMask();
+        this.beforeSnapshot = this.copyMask();
         const cell = this.cellAt(mouseX, mouseY);
         this.pressedCell = cell;
         if (!cell) return;
         const { x, y } = cell;
         const cur = this.mask[y][x];
         this.dragMode = cur == DOT ? EMPTY : DOT;
-        if (MOBILE) {
-            if (cur == EMPTY) this.mask[y][x] = DOT;
-            else if (cur == DOT) this.mask[y][x] = BULL;
-            else this.mask[y][x] = EMPTY;
-        } else if (mouseButton.left) {
-            if (cur == EMPTY) this.mask[y][x] = DOT;
-            else if (cur == DOT) this.mask[y][x] = BULL;
-            else this.mask[y][x] = EMPTY;
-        } else if (mouseButton.right) {
-            this.mask[y][x] = cur == BULL ? EMPTY : BULL;
-        }
+        this.applyDrag(x, y); // immediate feedback; reverted on release if no drag
     }
 
     mouseReleased() {
-        if (this.pressedCell) this.pushUndo(this._beforeSnapshot!);
+        if (this.hasDragged) {
+            this.pushUndo(this.beforeSnapshot!);
+        } else if (this.pressedCell) {
+            const { x, y } = this.pressedCell;
+            const cur = this.beforeSnapshot![y][x];
+            this.mask = this.beforeSnapshot!.map(row => [...row]) as Mask[][];
+            if (cur == EMPTY) this.mask[y][x] = DOT;
+            else if (cur == DOT) this.mask[y][x] = BULL;
+            else this.mask[y][x] = EMPTY;
+            this.pushUndo(this.beforeSnapshot!);
+        }
         this.dragMode = null;
+        this.checkBoard();
     }
 }
