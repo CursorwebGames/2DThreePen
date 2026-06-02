@@ -15,6 +15,7 @@ export class BullPen {
     colors: p5.Color[] = [];
     size: number;
     rectSize: number;
+    private canvasSize: number;
 
     onBoardChange!: () => void;
     onComplete!: () => void;
@@ -30,7 +31,8 @@ export class BullPen {
 
     mask: (Mask)[][];
 
-    constructor() {
+    constructor(canvasSize: number) {
+        this.canvasSize = canvasSize;
         this.board = `
 6 6 6 4 4 4 0 0
 3 6 6 6 3 4 4 0
@@ -42,7 +44,7 @@ export class BullPen {
 7 7 7 7 1 1 1 1`.trim().split('\n').map(x => x.split(' ').map(Number));
         const size = this.board.length;
         this.size = size;
-        this.rectSize = (50 * 8) / this.size;
+        this.rectSize = (canvasSize - 2 * REGION_BORDER) / this.size;
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
 
@@ -76,7 +78,7 @@ export class BullPen {
                 const cell = this.mask[y][x];
                 if (cell == BULL) {
                     fill(255);
-                    circle(rx + this.rectSize / 2, ry + this.rectSize / 2, 45);
+                    circle(rx + this.rectSize / 2, ry + this.rectSize / 2, this.rectSize - 5);
                     text("🦀", rx + this.rectSize / 2, ry + this.rectSize / 2);
                 }
             }
@@ -184,11 +186,16 @@ export class BullPen {
     /**
      * Set board with new puzzle
      */
+    setCanvasSize(canvasSize: number) {
+        this.canvasSize = canvasSize;
+        this.rectSize = (canvasSize - 2 * REGION_BORDER) / this.size;
+    }
+
     setBoard(board: number[][]) {
         this.board = board;
         const size = this.board.length;
         this.size = size;
-        this.rectSize = (50 * 8 - 2 * REGION_BORDER) / this.size;
+        this.rectSize = (this.canvasSize - 2 * REGION_BORDER) / this.size;
 
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
         this.colors = [];

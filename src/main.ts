@@ -9,14 +9,26 @@ let gen: PenGenerator;
 
 const hintDesc = document.querySelector(".hint-desc") as HTMLDivElement;
 
+const MAX_CANVAS = 50 * 8 + 2 * REGION_BORDER;
+function getCanvasSize() {
+    return Math.min(window.innerWidth - 32, window.innerHeight - 32, MAX_CANVAS);
+}
+
 window.setup = () => {
     const parent = document.querySelector(".canvas")!;
     parent.addEventListener("contextmenu", e => e.preventDefault());
-    createCanvas(50 * 8 + 2 * REGION_BORDER, 50 * 8 + 2 * REGION_BORDER).parent(parent);
-    pen = new BullPen();
+    const size = getCanvasSize();
+    createCanvas(size, size).parent(parent);
+    pen = new BullPen(size);
     pen.onBoardChange = () => { solver = new Solver(pen); };
     solver = new Solver(pen);
     gen = new PenGenerator(6);
+};
+
+window.windowResized = () => {
+    const size = getCanvasSize();
+    resizeCanvas(size, size);
+    pen.setCanvasSize(size);
 };
 
 window.draw = () => {
