@@ -3,6 +3,12 @@ import { BullPen, REGION_BORDER } from "./bullpen";
 import { Solver } from "./solver";
 import { PenGenerator } from "./genpen";
 
+import init, { greet } from "../bullpen/pkg";
+
+init().then(() => {
+    greet();
+});
+
 let pen: BullPen;
 let solver: Solver;
 let gen: PenGenerator;
