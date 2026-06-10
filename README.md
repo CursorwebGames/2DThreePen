@@ -27,3 +27,6 @@ New heuristics to test:
 
 Useful: https://kris.pengy.ca/starbattle
 Game: https://starbattle.puzzlebaron.com/init.php
+
+## Algorithm X
+Very fast solver [wikipedia](https://en.wikipedia.org/wiki/Knuth%27s_Algorithm_X)
