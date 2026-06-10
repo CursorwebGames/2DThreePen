@@ -34,14 +34,14 @@ export class BullPen {
     constructor(canvasSize: number) {
         this.canvasSize = canvasSize;
         this.board = `
-6 6 6 4 4 4 0 0
-3 6 6 6 3 4 4 0
-3 3 3 3 3 4 4 0
-3 3 5 5 3 2 2 2
-5 5 5 5 5 2 2 2
-7 7 7 7 5 1 1 1
-7 7 7 7 1 1 1 1
-7 7 7 7 1 1 1 1`.trim().split('\n').map(x => x.split(' ').map(Number));
+5 1 4 2 2 2 2 2 
+5 1 4 2 2 2 2 2 
+5 1 2 2 2 2 0 2 
+5 5 5 5 5 5 0 2 
+5 5 5 5 5 5 2 2 
+5 5 5 5 5 6 2 2 
+5 5 5 5 5 2 2 7 
+5 5 3 3 2 2 7 7`.trim().split('\n').map(x => x.split(' ').map(Number));
         const size = this.board.length;
         this.size = size;
         this.rectSize = (canvasSize - 2 * REGION_BORDER) / this.size;

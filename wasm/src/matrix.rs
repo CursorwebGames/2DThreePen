@@ -43,7 +43,7 @@ impl Matrix {
             size: Vec::with_capacity(n_cols + 1),
         };
 
-        assert_eq!(res.alloc_column(), H);
+        debug_assert_eq!(res.alloc_column(), H);
 
         for _ in 0..n_cols {
             res.add_column();
@@ -79,7 +79,7 @@ impl Matrix {
         let cell = self.x.alloc();
         // make sure both x and y refer to the same cell
         // both lookup tables need to have same num of nodes
-        assert_eq!(self.y.alloc(), cell);
+        debug_assert_eq!(self.y.alloc(), cell);
         cell
     }
 
@@ -100,6 +100,7 @@ impl Matrix {
             if is_filled {
                 self.size[c] += 1;
                 let new_cell = self.alloc(c);
+                debug_assert_eq!(new_cell.0, self.row_id.len());
                 self.row_id.push(row_id);
                 // self.y[c] gets the header node, and .prev takes you to the end of list
                 self.y.insert(self.y[c].prev, new_cell);
