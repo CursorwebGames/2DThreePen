@@ -9,6 +9,10 @@ pub struct BullpenSolver {
     /// Bitmap of board cells currently holding a bull,
     /// indexed by row_id = r * n + c
     placed: Vec<bool>,
+
+    /// Remaining work budget for the current solve call;
+    /// `solve_rec` stops exploring when it reaches 0
+    steps: usize,
 }
 
 impl BullpenSolver {
@@ -16,7 +20,6 @@ impl BullpenSolver {
     pub fn new(regions: &[Vec<usize>]) -> BullpenSolver {
         let n = regions.len();
 
-        // remap arbitrary labels to dense 0..n indices, in first-seen order
         let mut labels: Vec<usize> = Vec::with_capacity(n);
 
         let mut m = Matrix::new(3 * n);
@@ -42,6 +45,7 @@ impl BullpenSolver {
             m,
             n,
             placed: vec![false; n.pow(2)],
+            steps: usize::MAX,
         }
     }
 
@@ -142,13 +146,36 @@ impl BullpenSolver {
         self.m.uncover(c);
     }
 
+    /// Returns at most 2 soltuions.
     pub fn solve(&mut self) -> Vec<Vec<(usize, usize)>> {
+        self.solve_within(usize::MAX).unwrap()
+    }
+
+    /// Like `solve`, but gives up once the search has taken `budget`
+    /// recursion steps, returning None. Exhaustively proving "0 solutions"
+    /// or "exactly 1 solution" can take seconds on a pathological board;
+    /// a caller that only wants *cheap* boards can discard one rather
+    /// than pay to learn its exact answer. Aborting unwinds cleanly, so
+    /// the solver stays reusable.
+    pub fn solve_within(&mut self, budget: usize) -> Option<Vec<Vec<(usize, usize)>>> {
+        self.steps = budget;
         let mut out = vec![];
         self.solve_rec(&mut Vec::new(), &mut out);
-        out
+        if self.steps == 0 {
+            None
+        } else {
+            Some(out)
+        }
     }
 
     fn solve_rec(&mut self, csol: &mut Vec<(usize, usize)>, sols: &mut Vec<Vec<(usize, usize)>>) {
+        // out of budget: abandon this subtree. Parents still restore
+        // their covers on the way out, so the matrix unwinds cleanly.
+        if self.steps == 0 {
+            return;
+        }
+        self.steps -= 1;
+
         let m = &mut self.m;
 
         // choose column c
@@ -208,6 +235,10 @@ impl BullpenSolver {
             let mut j = m.x.cursor(i);
             while let Some(j) = j.prev(&m.x) {
                 m.uncover(m.c[j]);
+            }
+
+            if sols.len() >= 2 || self.steps == 0 {
+                break;
             }
         }
 

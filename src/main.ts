@@ -3,10 +3,6 @@ import { BullPen, REGION_BORDER } from "./bullpen";
 import { Solver } from "./solver";
 import { PenGenerator } from "./genpen";
 
-import init, { sum } from "../wasm/pkg";
-
-const wasmReady = init();
-
 let pen: BullPen;
 let solver: Solver;
 let gen: PenGenerator;
@@ -27,9 +23,6 @@ window.setup = () => {
     pen.onBoardChange = () => { solver = new Solver(pen); };
     solver = new Solver(pen);
     gen = new PenGenerator(6);
-    wasmReady.then(() => {
-        console.log(sum(6, 7));
-    });
 };
 
 window.windowResized = () => {

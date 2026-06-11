@@ -45,4 +45,17 @@ fn main() {
         println!("\nSolution {}: bulls at {}", i + 1, coords.join(", "));
         print_board(&regions, bulls);
     }
+
+    // demo the generator: fresh random 8x8 puzzle each run
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos() as u64;
+    let generated = bullpen::generate(27, seed);
+    println!("\nGenerated board (seed {seed}):");
+    print_board(&generated, &[]);
+
+    let bulls = &BullpenSolver::new(&generated).solve()[0];
+    println!("\nIts unique solution:");
+    print_board(&generated, bulls);
 }

@@ -18,11 +18,13 @@ Future optimizations:
 
 ## Generating Board
 * Randomly creating regions, and seeing if it contains bulls is faster than generating bulls and then creating regions
-* Use A* with number of solutions as heuristic
-    * Give up after several tries to avoid bottlenecks
-
-New heuristics to test:
-* Create preset regions (4x4 etc) to lower search space
+* Solve the board, capped at 2 solutions
+    * 0 solutions: reroll
+    * 1 solution: done
+    * 2 solutions: repair
+* Targeted repair: (Keep and Kill)
+    * Find a bull cell of kill that is not in keep, and move that cell into an adjacent region
+    (heuristic: num solutions should trend downwards)
 
 
 Useful: https://kris.pengy.ca/starbattle

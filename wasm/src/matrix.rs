@@ -43,7 +43,9 @@ impl Matrix {
             size: Vec::with_capacity(n_cols + 1),
         };
 
-        debug_assert_eq!(res.alloc_column(), H);
+        // side effect must stay out of debug_assert!, which release strips
+        let sentinel = res.alloc_column();
+        debug_assert_eq!(sentinel, H);
 
         for _ in 0..n_cols {
             res.add_column();
@@ -79,7 +81,8 @@ impl Matrix {
         let cell = self.x.alloc();
         // make sure both x and y refer to the same cell
         // both lookup tables need to have same num of nodes
-        debug_assert_eq!(self.y.alloc(), cell);
+        let y_cell = self.y.alloc();
+        debug_assert_eq!(y_cell, cell);
         cell
     }
 

@@ -1,4 +1,5 @@
 mod cell;
+mod genpenai;
 mod llist;
 mod matrix;
 mod solver;
@@ -8,6 +9,7 @@ use wasm_bindgen::prelude::*;
 
 // use crate::solver::BullpenSolver;
 
+pub use genpenai::generate;
 pub use solver::BullpenSolver;
 
 // #[wasm_bindgen(start)]
