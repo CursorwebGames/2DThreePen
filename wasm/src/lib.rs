@@ -12,8 +12,8 @@ use wasm_bindgen::prelude::*;
 pub use genpenai::generate;
 pub use solver::BullpenSolver;
 
-// #[wasm_bindgen(start)]
-// pub fn main() {
-//     #[cfg(debug_assertions)]
-//     utils::set_panic_hook();
-// }
+#[wasm_bindgen(start)]
+pub fn main() {
+    #[cfg(debug_assertions)]
+    utils::set_panic_hook();
+}

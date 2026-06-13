@@ -129,7 +129,7 @@ class AlgoXSolver:
 
 
 if __name__ == "__main__":
-    from solver import Solver
+    from research.hintsolver import Solver
 
     RUNS = 200
 

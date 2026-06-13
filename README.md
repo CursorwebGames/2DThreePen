@@ -18,13 +18,18 @@ Future optimizations:
 
 ## Generating Board
 * Randomly creating regions, and seeing if it contains bulls is faster than generating bulls and then creating regions
+    * Make some regions purposefully small (eg size=2)
+* Filter out the randomly generated region if we can cheaply show it has no solutions
+    * For example 3 regions occupy only 2 rows
 * Solve the board, capped at 2 solutions
     * 0 solutions: reroll
     * 1 solution: done
     * 2 solutions: repair
+    * If over 50k recursion steps, give up (board is too complicated to solve)=0 solutions
 * Targeted repair: (Keep and Kill)
     * Find a bull cell of kill that is not in keep, and move that cell into an adjacent region
     (heuristic: num solutions should trend downwards)
+    * For large boards, this might be impossible to swap, so try the oher way
 
 
 Useful: https://kris.pengy.ca/starbattle
