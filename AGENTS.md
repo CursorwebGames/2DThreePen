@@ -1,7 +1,6 @@
 # AGENTS.md
 
 ## Project Priorities
-
 Order of importance:
 1. Puzzle generation throughput
 2. Puzzle uniqueness correctness
@@ -13,9 +12,6 @@ This is a performance-sensitive project. Avoid introducing allocations, cloning,
 Code should be maintainable and readable enough that someone is able to learn from it and implement it from scratch without the help of AI.
 
 ## Algorithm
-
-In-depth notes on how the bullpen puzzle generators work.
-
 A *bullpen* (aka Star Battle, aka Queens) puzzle is an `n x n` grid partitioned into
 `n` contiguous regions. A solution places exactly **K** "bulls" in every row,
 every column, and every region, with no two bulls touching (Chebyshev distance
@@ -36,7 +32,6 @@ organized around that split.
 
 
 ## 1. The shared strategy: random regions + targeted repair
-
 Both generators run the same loop (`generate` in each file):
 
 ```
@@ -53,13 +48,11 @@ loop forever:                       # reroll from scratch when a board is hopele
         if not kill_solution(...):  break        # stuck -> reroll
 ```
 
-Why this works rather than searching blindly for a unique board: **every repair
-edit is guaranteed to preserve one known solution while destroying another**, so
+**Every repair edit is guaranteed to preserve one known solution while destroying another**, so
 the solution count can only walk *down* toward 1 — it can never accidentally hit
-0 mid-repair. See §2.
+0 mid-repair. See 2. Keep + Kill.
 
 ### Region growth (`random_regions`)
-
 Drop `n` seed cells, one per region, then flood outward. The frontier of legal
 growth moves is kept **incrementally**: claiming a cell pushes a move for each
 unassigned neighbor, and stale moves (cell already claimed) are skipped when
@@ -70,12 +63,11 @@ instead of rescanning the whole board per claim (`O(n^4)`).
 growth. Tiny regions are strong constraints: they shrink the solver's branching
 factor and push boards toward fewer solutions. Too many caps, though, make
 almost every roll unsolvable so all the time goes to growing garbage — there's a
-measured sweet spot (`num_capped` in Rust; `NUM_CAPPED`/`CAP_SIZE` in Python).
+measured optimum (`num_capped` in Rust; `NUM_CAPPED`/`CAP_SIZE` in Python).
 After growth, cells walled off by full capped regions are absorbed into any
 assigned neighbor (the cap is a bias, not a hard invariant).
 
 ### Cheap prefilter: matching (`matchable`)
-
 Before paying for a real solve, reject provably-unsolvable boards in
 microseconds. In any solution the bulls occupy distinct rows and each region
 holds its bulls, so **regions must be matchable against the rows they touch**
@@ -84,9 +76,7 @@ failing it is unsolvable, no search needed. (Passing proves nothing — adjacenc
 can still rule everything out; that's what the real solver is for.) In Rust this
 catches ~96% of zero-solution rolls (`matching_filter_catch_rate`).
 
-
 ## 2. Keep + kill (the repair step)
-
 This is the heart of the generator and is **identical in both** (`kill_solution` + `stays_contiguous`).
 
 When a board has exactly two solutions, label them **KEEP** (survives) and

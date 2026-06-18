@@ -173,28 +173,47 @@ def generate(n: int) -> Board:
                 break  # no legal edit found, reroll
 
 
+_COLORS = [31, 32, 33, 34, 35, 36, 91, 92, 93, 94, 95, 96, 97, 90]
+
+
+def show(board: Board, sol: list[Pos] | None = None) -> None:
+    bulls = set(sol or [])
+    n = len(board)
+    width = len(str(n - 1))
+    print()
+    for y in range(n):
+        for x in range(n):
+            region = board[y][x]
+            mark = "★" if (y, x) in bulls else str(region)
+            print(f"\033[{_COLORS[region % len(_COLORS)]}m{mark.rjust(width)}\033[0m", end=" ")
+        print()
+
+
 if __name__ == "__main__":
+    import os
     import sys
     import time
 
-    # Windows console defaults to cp1252, which can't print the "★"
-    # in AlgoXSolver.show_solution
     sys.stdout.reconfigure(encoding="utf-8")
+    os.system("")  # enable ANSI on legacy Windows console
 
     SIZE = 8
     RUNS = 20
 
     total = 0.0
+    last = None
     for i in range(1, RUNS + 1):
         t0 = time.perf_counter()
-        puzzle = generate(SIZE)
+        last = generate(SIZE)
         elapsed = (time.perf_counter() - t0) * 1000
         total += elapsed
-        print(f"board {i}: {elapsed:.1f} ms")
+        print(f"board {i:2}: {elapsed:.1f} ms")
 
     print(f"\naverage: {total / RUNS:.1f} ms over {RUNS} boards of size {SIZE}")
 
-    solver = AlgoXSolver(puzzle)
-    solver.solve()
-    solver.show_solution()
-    print(f"unique: {solver.has_unique_solution()}")
+    sols = solve_up_to_two(last)
+    print("\npuzzle:")
+    show(last)
+    print("\nsolution:")
+    show(last, sols[0])
+    print(f"unique: {len(sols) == 1}")

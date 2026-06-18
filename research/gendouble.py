@@ -579,27 +579,26 @@ if __name__ == "__main__":
     import sys
     import time
 
-    # Windows console defaults to cp1252, which can't print "★"
     sys.stdout.reconfigure(encoding="utf-8")
-    os.system("")  # nudge the legacy Windows console into ANSI mode
+    os.system("")  # enable ANSI on legacy Windows console
 
-    for size in (10,):
-        runs = 1
-        total = 0.0
-        last = None
-        for i in range(1, runs + 1):
-            t0 = time.perf_counter()
-            last = generate(size)
-            elapsed = (time.perf_counter() - t0) * 1000
-            total += elapsed
-            print(f"n={size} board {i}: {elapsed:.0f} ms")
+    SIZE = 10
+    RUNS = 5
 
-        sols = solve_up_to_two(last)
-        assert len(sols) == 1, "generated board is not unique?!"
-        assert_valid_solution(last, sols[0])
-        print(f"\nn={size} average: {total / runs:.0f} ms over {runs} boards")
-        print("\npuzzle:")
-        show(last)
-        print("\nsolution:")
-        show(last, sols[0])
-        print()
+    total = 0.0
+    last = None
+    for i in range(1, RUNS + 1):
+        t0 = time.perf_counter()
+        last = generate(SIZE)
+        elapsed = (time.perf_counter() - t0) * 1000
+        total += elapsed
+        print(f"board {i:2}: {elapsed:.1f} ms")
+
+    print(f"\naverage: {total / RUNS:.1f} ms over {RUNS} boards of size {SIZE}")
+
+    sols = solve_up_to_two(last)
+    print("\npuzzle:")
+    show(last)
+    print("\nsolution:")
+    show(last, sols[0])
+    print(f"unique: {len(sols) == 1}")

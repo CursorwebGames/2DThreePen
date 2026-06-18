@@ -3,7 +3,7 @@ from collections import deque
 from typing import Optional
 
 from algox import AlgoXSolver
-from research.maker_preplace import Board, SIZE, count_solutions, _a_star, show_board
+from maker_preplace import Board, SIZE, count_solutions, _a_star, show_board
 
 # ---------------------------------------------------------------------------
 # Random flood-fill: no star pre-placement, just N random seeds

@@ -18,7 +18,7 @@
 //! so repair takes far longer than the zero-solution rerolls it saves —
 //! benchmarked much slower at n=15 than random seeding.
 
-use crate::solver::BullpenSolver;
+use crate::single_solver::SingleSolver;
 
 /// A bull position: (row, col).
 type Pos = (usize, usize);
@@ -102,7 +102,7 @@ fn generate_capped(n: usize, seed: u64, caps: (usize, usize)) -> Grid {
         }
 
         for _ in 0..MAX_REPAIRS {
-            let sols = match BullpenSolver::new(&grid).solve_within(SOLVE_BUDGET) {
+            let sols = match SingleSolver::new(&grid).solve_within(SOLVE_BUDGET) {
                 Some(sols) => sols,
                 None => break, // proof too expensive — discard the board
             };
@@ -275,7 +275,12 @@ fn matchable(grid: &Grid) -> bool {
 /// via augmenting paths; true if a perfect matching exists.
 /// `touch[region][x]` = region has a cell in row/col x.
 fn perfect_matching(touch: &[Vec<bool>]) -> bool {
-    fn augment(region: usize, touch: &[Vec<bool>], seen: &mut [bool], matched: &mut [usize]) -> bool {
+    fn augment(
+        region: usize,
+        touch: &[Vec<bool>],
+        seen: &mut [bool],
+        matched: &mut [usize],
+    ) -> bool {
         for x in 0..touch.len() {
             if touch[region][x] && !seen[x] {
                 seen[x] = true;
@@ -390,7 +395,7 @@ mod tests {
                 let grid = generate(n, seed);
                 assert_valid_regions(&grid);
                 assert!(
-                    BullpenSolver::new(&grid).is_unique(),
+                    SingleSolver::new(&grid).is_unique(),
                     "n={} seed={} not unique: {:?}",
                     n,
                     seed,
@@ -425,7 +430,12 @@ mod tests {
             for seed in 0..runs {
                 generate_capped(n, seed, caps);
             }
-            println!("n={} caps={:?}: {:?} avg", n, caps, start.elapsed() / runs as u32);
+            println!(
+                "n={} caps={:?}: {:?} avg",
+                n,
+                caps,
+                start.elapsed() / runs as u32
+            );
         }
     }
 
@@ -433,10 +443,15 @@ mod tests {
         let start = std::time::Instant::now();
         for seed in 0..runs {
             let grid = generate(n, seed);
-            assert!(BullpenSolver::new(&grid).is_unique());
+            assert!(SingleSolver::new(&grid).is_unique());
         }
         let total = start.elapsed();
-        println!("n={}: {:?} avg over {} boards", n, total / runs as u32, runs);
+        println!(
+            "n={}: {:?} avg over {} boards",
+            n,
+            total / runs as u32,
+            runs
+        );
     }
 
     /// Not run by default. Time generation with e.g.:
@@ -467,7 +482,7 @@ mod tests {
         for _ in 0..boards {
             let grid = random_regions(n, &mut rng, num_capped(n));
             let matchable = matchable(&grid);
-            let solvable = !BullpenSolver::new(&grid).solve().is_empty();
+            let solvable = !SingleSolver::new(&grid).solve().is_empty();
 
             // the filter must never reject a solvable board
             assert!(matchable || !solvable, "filter rejected a solvable board");
@@ -529,7 +544,7 @@ mod tests {
             let mut ok = false;
             for _ in 0..MAX_REPAIRS {
                 let t = Instant::now();
-                let sols = BullpenSolver::new(&grid).solve_within(SOLVE_BUDGET);
+                let sols = SingleSolver::new(&grid).solve_within(SOLVE_BUDGET);
                 solve_time += t.elapsed();
                 solves += 1;
                 let sols = match sols {

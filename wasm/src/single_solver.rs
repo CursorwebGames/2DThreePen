@@ -1,6 +1,6 @@
 use crate::matrix::{Matrix, H};
 
-pub struct BullpenSolver {
+pub struct SingleSolver {
     m: Matrix,
 
     /// Board width
@@ -15,9 +15,9 @@ pub struct BullpenSolver {
     steps: usize,
 }
 
-impl BullpenSolver {
+impl SingleSolver {
     /// Takes in `[[1, 1], [2, 2]]` etc.
-    pub fn new(regions: &[Vec<usize>]) -> BullpenSolver {
+    pub fn new(regions: &[Vec<usize>]) -> SingleSolver {
         let n = regions.len();
 
         let mut labels: Vec<usize> = Vec::with_capacity(n);
@@ -32,16 +32,16 @@ impl BullpenSolver {
                 });
 
                 let mut mrow = vec![false; 3 * n];
-                mrow[r] = true;
-                mrow[n + c] = true;
-                mrow[2 * n + region] = true;
+                mrow[r] = true; // satisfy row constraint
+                mrow[n + c] = true; // satisfy col constraint
+                mrow[2 * n + region] = true; // satisfy region constraint
                 m.add_row(&mrow);
             }
         }
 
         assert_eq!(labels.len(), n);
 
-        BullpenSolver {
+        SingleSolver {
             m,
             n,
             placed: vec![false; n.pow(2)],
@@ -305,8 +305,8 @@ mod tests {
         // the second (its row-0 and row-2 queens would share region 1)
         let regions = board([[0, 0, 1, 1], [0, 2, 1, 1], [2, 2, 3, 1], [2, 3, 3, 3]]);
         assert_eq!(brute_force(&regions), 1);
-        assert_eq!(BullpenSolver::new(&regions).count_sol(), 1);
-        assert!(BullpenSolver::new(&regions).is_unique());
+        assert_eq!(SingleSolver::new(&regions).count_sol(), 1);
+        assert!(SingleSolver::new(&regions).is_unique());
     }
 
     #[test]
@@ -314,21 +314,21 @@ mod tests {
         // region == board column: both non-touching layouts survive
         let regions = board([[0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3], [0, 1, 2, 3]]);
         assert_eq!(brute_force(&regions), 2);
-        assert_eq!(BullpenSolver::new(&regions).count_sol(), 2);
-        assert!(!BullpenSolver::new(&regions).is_unique());
+        assert_eq!(SingleSolver::new(&regions).count_sol(), 2);
+        assert!(!SingleSolver::new(&regions).is_unique());
     }
 
     #[test]
     fn one_based_labels() {
         // same board as unique_puzzle, but with 1-based region labels
         let regions = board([[1, 1, 2, 2], [1, 3, 2, 2], [3, 3, 4, 2], [3, 4, 4, 4]]);
-        assert!(BullpenSolver::new(&regions).is_unique());
+        assert!(SingleSolver::new(&regions).is_unique());
     }
 
     #[test]
     fn solver_is_reusable_after_counting() {
         let regions = board([[0, 0, 1, 1], [0, 2, 1, 1], [2, 2, 3, 1], [2, 3, 3, 3]]);
-        let mut solver = BullpenSolver::new(&regions);
+        let mut solver = SingleSolver::new(&regions);
         assert_eq!(solver.count_sol(), 1);
         // matrix and bitmap must be fully restored: counting again agrees
         assert_eq!(solver.count_sol(), 1);
@@ -359,7 +359,7 @@ mod tests {
             let full = brute_force(&regions);
             assert_eq!(full, expected, "{name}: expected count vs brute force");
             assert_eq!(
-                BullpenSolver::new(&regions).count_sol(),
+                SingleSolver::new(&regions).count_sol(),
                 full.min(2),
                 "{name}: solver vs brute force"
             );
@@ -398,7 +398,7 @@ mod tests {
 
             let expected = brute_force(&regions).min(2);
             assert_eq!(
-                BullpenSolver::new(&regions).count_sol(),
+                SingleSolver::new(&regions).count_sol(),
                 expected,
                 "mismatch for regions {:?}",
                 regions
