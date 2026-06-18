@@ -16,10 +16,63 @@ const CAP_SIZE: RangeInclusive<usize> = 1..=3;
 /// (y, x)
 type Pos = (usize, usize);
 
+/// Per-`gen` counters
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default, Clone, Copy, Debug)]
+pub struct Stats {
+    /// boards attempted
+    pub rolls: usize,
+    /// rolls rejected by the cheap matching prefilter
+    pub unsolvable: usize,
+    /// solver invocations
+    pub solves: usize,
+    /// solves that hit SOLVE_BUDGET and were abandoned
+    pub over_budget: usize,
+    /// num. of region edits applied
+    pub repairs: usize,
+    /// cumulative time growing regions
+    pub t_regions: std::time::Duration,
+    /// cumulative time in the matching prefilter
+    pub t_solvable: std::time::Duration,
+    /// cumulative time in the solver
+    pub t_solve: std::time::Duration,
+    /// cumulative time in repair (`kill_sol`)
+    pub t_kill: std::time::Duration,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+macro_rules! timed {
+    ($self:ident.$field:ident, $body:expr) => {{
+        let time = std::time::Instant::now();
+        let out = $body;
+        $self.stats.$field += time.elapsed();
+        out
+    }};
+}
+#[cfg(target_arch = "wasm32")]
+macro_rules! timed {
+    ($self:ident.$field:ident, $body:expr) => {
+        $body
+    };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+macro_rules! bump {
+    ($self:ident.$field:ident) => {
+        $self.stats.$field += 1;
+    };
+}
+#[cfg(target_arch = "wasm32")]
+macro_rules! bump {
+    ($self:ident.$field:ident) => {};
+}
+
 pub struct GenPen {
     rng: Rng,
     grid: Vec<Vec<usize>>,
     n: usize,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub stats: Stats,
 }
 
 impl GenPen {
@@ -28,11 +81,17 @@ impl GenPen {
             n: 0,
             grid: vec![],
             rng,
+            #[cfg(not(target_arch = "wasm32"))]
+            stats: Stats::default(),
         }
     }
 
     pub fn gen(&mut self, n: usize) -> Vec<Vec<usize>> {
         self.n = n;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.stats = Stats::default();
+        }
         self.init_grid();
         self.gen_puzzle();
         std::mem::take(&mut self.grid)
@@ -40,25 +99,36 @@ impl GenPen {
 
     fn gen_puzzle(&mut self) {
         loop {
+            bump!(self.rolls);
             self.clear();
-            self.gen_regions();
+            timed!(self.t_regions, self.gen_regions());
 
             // ~96% of boards are NOT SOLVABLE!
-            if !self.solvable() {
+            if !timed!(self.t_solvable, self.solvable()) {
+                bump!(self.unsolvable);
                 continue;
             }
 
             for _ in 0..MAX_REPAIRS {
-                let sols = match SingleSolver::new(&self.grid).solve_within(SOLVE_BUDGET) {
+                bump!(self.solves);
+                let sols = match timed!(
+                    self.t_solve,
+                    SingleSolver::new(&self.grid).solve_within(SOLVE_BUDGET)
+                ) {
                     Some(sols) => sols,
-                    None => break, // too expensive
+                    None => {
+                        bump!(self.over_budget);
+                        break; // too expensive
+                    }
                 };
                 match sols.len() {
                     0 => break,
                     1 => return, // yay!
                     _ => {
-                        if !self.kill_sol(&sols[0], &sols[1]) && !self.kill_sol(&sols[1], &sols[0])
-                        {
+                        bump!(self.repairs);
+                        let killed = timed!(self.t_kill, self.kill_sol(&sols[0], &sols[1]))
+                            || timed!(self.t_kill, self.kill_sol(&sols[1], &sols[0]));
+                        if !killed {
                             break;
                         }
                     }

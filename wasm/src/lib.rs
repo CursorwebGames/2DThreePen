@@ -9,6 +9,8 @@ mod utils;
 use wasm_bindgen::prelude::*;
 
 pub use gen_single::GenPen;
+#[cfg(not(target_arch = "wasm32"))]
+pub use gen_single::Stats;
 pub use single_solver::SingleSolver;
 
 #[wasm_bindgen(start)]
