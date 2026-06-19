@@ -1,3 +1,4 @@
+# no constraints on region size
 import heapq
 import random
 from collections import deque
