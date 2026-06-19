@@ -100,8 +100,6 @@ export class BullPen {
         this.size = size;
         this.rectSize = (canvasSize - 2 * REGION_BORDER) / this.size;
 
-        console.log(this.size);
-
         this.mask = Array.from({ length: size }, () => Array(size).fill(EMPTY));
 
         for (let i = 0; i < this.board.length; i++) {

@@ -1,10 +1,12 @@
 ## Build
 ```sh
+cd wasm
+
 # dev
-wasm-pack build wasm --target web --dev
+wasm-pack build --target web --dev
 
 # prod
-wasm-pack build wasm --target web
+wasm-pack build --target web
 ```
 
 Useful Links:

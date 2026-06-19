@@ -1,11 +1,10 @@
 import "p5";
 import { BullPen, REGION_BORDER } from "./bullpen";
 import { Solver } from "./solver";
-import { PenGenerator } from "./genpen";
+import { genSingle } from "./genpen";
 
 let pen: BullPen;
 let solver: Solver;
-let gen: PenGenerator;
 
 const hintDesc = document.querySelector(".hint-desc") as HTMLDivElement;
 
@@ -22,7 +21,6 @@ window.setup = () => {
     pen = new BullPen(size);
     pen.onBoardChange = () => { solver = new Solver(pen); };
     solver = new Solver(pen);
-    gen = new PenGenerator(6);
 };
 
 window.windowResized = () => {
@@ -70,13 +68,5 @@ document.addEventListener("keydown", (e) => {
 });
 
 (document.querySelector(".gen") as HTMLButtonElement).addEventListener("click", () => {
-    let board: number[][] | null = null;
-    // while (!board) {
-    board = gen.generate();
-    // }
-    if (!board) {
-        console.log('failed, try again');
-        return;
-    }
-    pen.setBoard(board);
+    genSingle(8).then(board => pen.setBoard(board));
 });
