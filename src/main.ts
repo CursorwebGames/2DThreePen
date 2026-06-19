@@ -67,6 +67,7 @@ document.addEventListener("keydown", (e) => {
     console.log(JSON.stringify(pen.board));
 });
 
-(document.querySelector(".gen") as HTMLButtonElement).addEventListener("click", () => {
-    genSingle(8).then(board => pen.setBoard(board));
+(document.querySelector(".gen") as HTMLButtonElement).addEventListener("click", async () => {
+    const board = await genSingle(8);
+    pen.setBoard(board);
 });
