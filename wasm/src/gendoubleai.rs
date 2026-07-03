@@ -10,32 +10,48 @@
 //! (a region's two bulls are interchangeable) and silently breaks the
 //! uniqueness check.
 //!
-//! One deliberate simplification vs. Knuth's TAOCP 7.2.2.1 formulation:
-//! Knuth picks ONE option per search node and may return to a partially
-//! filled item later, relying on the tweak/untweak dance to keep the
-//! enumeration duplicate-free. Here the chosen item is *saturated in
-//! place* instead: a single search node picks all `need` remaining
-//! options for the item at once, in vertical-list order, so every
-//! K-subset is enumerated exactly once with no extra machinery. The
-//! branch choice is a deterministic function of the search state, so
-//! each solution is reached by exactly one path and the count (capped
-//! at 2) stays trustworthy.
+//! Branching follows Knuth's tweak idea: each search node places ONE
+//! bull — the first remaining candidate of the most constrained item —
+//! then re-runs item selection, so a partially filled item can be
+//! interrupted by whatever became tightest. Duplicate-freeness comes
+//! from candidate order: when the search moves past a candidate x of
+//! item p, x stays excluded from *every* list for the rest of that
+//! node's loop ("tweaked" off), so deeper picks for p only come from
+//! below x and each K-subset is enumerated exactly once. An item is
+//! only fully covered when its need hits 0. The branch choice is a
+//! deterministic function of the search state, so each solution is
+//! reached by exactly one path and the count (capped at 2) stays
+//! trustworthy.
+//!
+//! A pleasant consequence: because the branch item is never covered
+//! early, every option still in any list is fully placeable, so item
+//! sizes are always honest and `size < need` is a sound dead-branch
+//! test at every node — no special cases.
 //!
 //! What this buys over the region-MRV backtracker in gendouble.py:
 //! - MRV runs over all 3n items (rows, columns, AND regions), not just
 //!   regions — a starved row can become the branch point.
 //! - Candidate elimination is incremental (dancing links), not a full
 //!   grid scan per node.
-//! What it loses: the per-node live-cell counts of the Python solver
-//! see adjacency; DLX list sizes don't (a listed option may still
-//! conflict with a placed bull). Adjacency stays imperative, exactly as
-//! in single_solver.rs: a `placed` bitmap plus `conflicts` skips any
-//! candidate touching a bull already on the board.
 //!
-//! This file is a self-contained prototype (not yet declared in
-//! lib.rs): its own RNG, solver, and generator, so it can be compiled
-//! and tested standalone with
-//! `rustc --test -O wasm/src/gendoubleai.rs -o gendouble_test`.
+//! Adjacency lives in the links too (unlike single_solver.rs, which
+//! checks a `placed` bitmap per candidate): committing a bull detaches
+//! every still-listed option within Chebyshev distance 1 of it. So
+//! list sizes only count genuinely placeable cells, which makes the
+//! `size < need` check exactly the Python solver's adjacency-aware
+//! live-count prune — maintained incrementally instead of recomputed
+//! by a full grid scan per node — and it means candidates drawn from a
+//! list never need an adjacency test at all.
+//!
+//! Undo is a trail: every detached node (and de-listed header) is
+//! pushed onto one stack, and backtracking pops to a mark. The search
+//! is strictly LIFO, so popping the trail restores links in exactly
+//! the reverse order they were broken, no matter which mechanism
+//! (item cover or adjacency hiding) broke them.
+//!
+//! This file is self-contained (own RNG, solver, and generator), so
+//! besides `cargo test` it can also be compiled and tested standalone
+//! with `rustc --test -O wasm/src/gendoubleai.rs -o gendouble_test`.
 
 /// Bulls per row, column, and region. Kept as a runtime parameter on
 /// the solver so K=3 ("threepen") falls out later; the generator's
@@ -54,14 +70,23 @@ const UNASSIGNED: usize = usize::MAX;
 /// Give up repairing one board after this many edits and reroll.
 const MAX_REPAIRS: usize = 50;
 
-/// Per-solve work budget (recursion steps). Boards whose uniqueness or
-/// unsolvability proof is pathologically expensive get discarded rather
-/// than paid for (cf. genpenai.rs).
-const SOLVE_BUDGET: usize = 200_000;
+/// Per-solve work budget (committed bull placements). Boards whose
+/// uniqueness or unsolvability proof is pathologically expensive get
+/// discarded rather than paid for (cf. genpenai.rs). Swept at n=14
+/// (fixed seeds, medians): unimodal with the optimum at 25k — half the
+/// time of the old 200k, while 1k censors so hard that almost no board
+/// survives (~4x worse). Retune with sweep_budget_*.
+const SOLVE_BUDGET: usize = 25_000;
 
-/// How many regions get a size cap (inclusive range). Tuned at n=10 in
-/// research/gendouble.py; retune with sweep_caps_* for other sizes.
-const NUM_CAPPED: (usize, usize) = (5, 7);
+/// How many regions get a size cap (inclusive range). Swept at n=10,
+/// 12, and 14 (fixed seeds, medians): n=10 is insensitive, n=12's
+/// optimum is (7,9), n=14's is (9,11) — capping about two thirds of
+/// the regions, more than the half the weaker Python solver liked, and
+/// the curve is unimodal on both sides (all 14 capped at n=14 is ~10x
+/// worse). Retune with sweep_caps_*.
+fn num_capped(n: usize) -> (usize, usize) {
+    (n.saturating_sub(5), n.saturating_sub(3))
+}
 
 /// Size cap for capped regions (inclusive range). The floor is 3, not
 /// 1 as in the single generator: a region must hold 2 non-touching
@@ -109,8 +134,8 @@ impl Rng {
 /// Items (3n of them): one per board row, per board column, per region;
 /// each must be covered exactly `k` times. Options (n^2 of them): one
 /// per cell — placing a bull on (r, c) covers items r, n+c, 2n+g once
-/// each. A set of options covering every item exactly k times is a
-/// solution, minus adjacency, which is enforced imperatively.
+/// each, and hides every option adjacent to (r, c). A set of options
+/// covering every item exactly k times is a solution.
 ///
 /// Node layout: everything lives in flat arrays indexed by node id.
 /// Id 0 is the horizontal sentinel, ids 1..=3n are the item headers,
@@ -119,6 +144,7 @@ impl Rng {
 /// found by arithmetic instead of horizontal links.
 pub struct DoubleSolver {
     n: usize,
+    k: usize,
 
     /// Id of the first option node (= 3n + 1).
     first: usize,
@@ -146,11 +172,33 @@ pub struct DoubleSolver {
     /// multiplicity — Algorithm X is the special case need = 1.
     need: Vec<usize>,
 
-    /// Bitmap of board cells currently holding a bull, indexed by cell
-    /// id r*n + c.
-    placed: Vec<bool>,
+    /// Per option node: currently linked into its vertical list. Both
+    /// unlinking mechanisms (cover and adjacency hiding) can race for
+    /// the same node; this flag makes "detach if attached" safe.
+    attached: Vec<bool>,
 
-    /// Remaining work budget for the current solve call.
+    /// Per cell: how many placed bulls have it in their 3x3
+    /// neighborhood. A count, not a boolean — two bulls can block the
+    /// same cell, and removing one must leave it blocked (cf.
+    /// gendouble.py). A cell's options are hidden while blocked > 0.
+    blocked: Vec<u32>,
+
+    /// Undo trail: node ids detached (and header ids de-listed, told
+    /// apart by id < first) since the search began, in order.
+    trail: Vec<usize>,
+
+    /// Stop searching after this many solutions (2 for counting, 1
+    /// when hunting for a solution other than a known one).
+    max_sols: usize,
+
+    /// A known solution (sorted) that doesn't count when found — the
+    /// repair loop already has it, so "find up to 2" becomes the
+    /// strictly cheaper "find 1 that differs".
+    skip: Option<Vec<Pos>>,
+
+    /// Remaining work budget for the current solve call, charged per
+    /// committed placement — that is where the cover/hide work scales,
+    /// so the budget censors expensive boards where they actually pay.
     steps: usize,
 }
 
@@ -164,19 +212,47 @@ impl DoubleSolver {
 
         let mut s = DoubleSolver {
             n,
+            k,
             first,
-            hprev: (0..=cols).map(|i| if i == 0 { cols } else { i - 1 }).collect(),
-            hnext: (0..=cols).map(|i| if i == cols { 0 } else { i + 1 }).collect(),
-            up: (0..total).collect(),
-            down: (0..total).collect(),
+            hprev: vec![0; cols + 1],
+            hnext: vec![0; cols + 1],
+            up: vec![0; total],
+            down: vec![0; total],
             col: vec![0; total],
             opt: vec![0; total],
             size: vec![0; cols + 1],
-            need: vec![k; cols + 1],
-            placed: vec![false; n * n],
+            need: vec![0; cols + 1],
+            attached: vec![false; total],
+            blocked: vec![0; n * n],
+            trail: Vec::new(),
+            max_sols: 2,
+            skip: None,
             steps: usize::MAX,
         };
-        s.need[0] = 0; // sentinel is not an item
+        s.reset(grid);
+        s
+    }
+
+    /// Relink the whole structure for `grid`, reusing every buffer.
+    /// The repair loop re-solves the same board dozens of times with
+    /// one cell's region changed per edit; this makes each re-solve
+    /// allocation-free instead of rebuilding the solver from scratch.
+    pub fn reset(&mut self, grid: &Grid) {
+        let n = self.n;
+        assert_eq!(grid.len(), n, "reset grid must match the solver's n");
+        let cols = 3 * n;
+
+        for i in 0..=cols {
+            self.hprev[i] = if i == 0 { cols } else { i - 1 };
+            self.hnext[i] = if i == cols { 0 } else { i + 1 };
+            self.up[i] = i;
+            self.down[i] = i;
+            self.size[i] = 0;
+            self.need[i] = self.k;
+        }
+        self.need[0] = 0; // sentinel is not an item
+        self.trail.clear();
+        self.blocked.iter_mut().for_each(|b| *b = 0);
 
         for r in 0..n {
             assert_eq!(grid[r].len(), n, "grid must be an n x n square");
@@ -187,20 +263,20 @@ impl DoubleSolver {
                 // items covered by a bull on this cell
                 let items = [1 + r, 1 + n + c, 1 + 2 * n + g];
                 for (t, &h) in items.iter().enumerate() {
-                    let nd = first + 3 * o + t;
-                    s.col[nd] = h;
-                    s.opt[nd] = o;
+                    let nd = self.first + 3 * o + t;
+                    self.col[nd] = h;
+                    self.opt[nd] = o;
+                    self.attached[nd] = true;
                     // append at the bottom of h's vertical list
-                    let bottom = s.up[h];
-                    s.down[bottom] = nd;
-                    s.up[nd] = bottom;
-                    s.down[nd] = h;
-                    s.up[h] = nd;
-                    s.size[h] += 1;
+                    let bottom = self.up[h];
+                    self.down[bottom] = nd;
+                    self.up[nd] = bottom;
+                    self.down[nd] = h;
+                    self.up[h] = nd;
+                    self.size[h] += 1;
                 }
             }
         }
-        s
     }
 
     /// Whether the puzzle has exactly one solution.
@@ -213,10 +289,37 @@ impl DoubleSolver {
         self.solve_within(usize::MAX).unwrap()
     }
 
-    /// Like `solve`, but gives up once the search has taken `budget`
-    /// recursion steps, returning None. Aborting unwinds cleanly, so
-    /// the solver stays reusable.
+    /// Like `solve`, but gives up once the search has placed `budget`
+    /// bulls, returning None. Aborting unwinds cleanly, so the solver
+    /// stays reusable.
     pub fn solve_within(&mut self, budget: usize) -> Option<Vec<Vec<Pos>>> {
+        self.max_sols = 2;
+        self.skip = None;
+        self.run(budget)
+    }
+
+    /// The repair loop's question: does any solution other than
+    /// `known` exist? `known` must be sorted and must be a solution of
+    /// the current board (the keep/kill edit guarantees the surviving
+    /// one is). Finding one differing solution needs a single find
+    /// instead of two, and only the final "no, it's unique" answer
+    /// pays for a full-tree proof.
+    ///
+    /// Returns None over budget, Some(None) if `known` is the unique
+    /// solution, Some(Some(other)) otherwise.
+    pub fn solve_other_within(
+        &mut self,
+        budget: usize,
+        known: &[Pos],
+    ) -> Option<Option<Vec<Pos>>> {
+        debug_assert!(known.windows(2).all(|w| w[0] <= w[1]));
+        self.max_sols = 1;
+        self.skip = Some(known.to_vec());
+        let sols = self.run(budget)?;
+        Some(sols.into_iter().next())
+    }
+
+    fn run(&mut self, budget: usize) -> Option<Vec<Vec<Pos>>> {
         self.steps = budget;
         let mut sols = Vec::new();
         self.solve_rec(&mut Vec::new(), &mut sols);
@@ -227,36 +330,46 @@ impl DoubleSolver {
         }
     }
 
-    /// Detach option node j from its vertical list.
+    /// Record a completed placement set, unless it is the caller's
+    /// already-known solution.
+    fn record(&mut self, csol: &[Pos], sols: &mut Vec<Vec<Pos>>) {
+        if let Some(skip) = &self.skip {
+            let mut sorted = csol.to_vec();
+            sorted.sort_unstable();
+            if sorted == *skip {
+                return;
+            }
+        }
+        sols.push(csol.to_vec());
+    }
+
+    /// Detach option node j from its vertical list, recording it on the
+    /// trail so `undo_to` can relink it later.
     fn detach(&mut self, j: usize) {
+        debug_assert!(self.attached[j]);
+        self.attached[j] = false;
         self.down[self.up[j]] = self.down[j];
         self.up[self.down[j]] = self.up[j];
         self.size[self.col[j]] -= 1;
+        self.trail.push(j);
     }
 
-    /// Restore previously detached node j (its own links still point at
-    /// its old neighbors — the dancing links trick).
-    fn restore(&mut self, j: usize) {
-        self.down[self.up[j]] = j;
-        self.up[self.down[j]] = j;
-        self.size[self.col[j]] += 1;
-    }
-
-    /// Hide option (of node i) from every list except the one i is in.
-    fn hide(&mut self, i: usize) {
-        let base = self.first + 3 * self.opt[i];
-        for j in base..base + 3 {
-            if j != i {
-                self.detach(j);
-            }
-        }
-    }
-
-    fn unhide(&mut self, i: usize) {
-        let base = self.first + 3 * self.opt[i];
-        for j in (base..base + 3).rev() {
-            if j != i {
-                self.restore(j);
+    /// Undo every detach/de-list since the trail was `mark` entries
+    /// long. Popping restores in exact reverse order, which is what
+    /// dancing-links relinking requires (a detached node's own links
+    /// still point at its old neighbors).
+    fn undo_to(&mut self, mark: usize) {
+        while self.trail.len() > mark {
+            let j = self.trail.pop().unwrap();
+            if j < self.first {
+                // header: relink into the horizontal list
+                self.hnext[self.hprev[j]] = j;
+                self.hprev[self.hnext[j]] = j;
+            } else {
+                self.attached[j] = true;
+                self.down[self.up[j]] = j;
+                self.up[self.down[j]] = j;
+                self.size[self.col[j]] += 1;
             }
         }
     }
@@ -264,63 +377,75 @@ impl DoubleSolver {
     /// Item h is saturated: remove it from the header list and hide all
     /// its remaining options from other items' lists. Identical to
     /// Algorithm X's cover — the difference is only *when* it is called
-    /// (need hitting 0, not the first pick).
+    /// (need hitting 0, not the first pick). Undone via the trail.
     fn cover(&mut self, h: usize) {
+        self.trail.push(h);
         self.hnext[self.hprev[h]] = self.hnext[h];
         self.hprev[self.hnext[h]] = self.hprev[h];
         let mut i = self.down[h];
         while i != h {
-            self.hide(i);
+            let base = self.first + 3 * self.opt[i];
+            for j in base..base + 3 {
+                // adjacency hiding may have beaten us to a sibling
+                if j != i && self.attached[j] {
+                    self.detach(j);
+                }
+            }
             i = self.down[i];
         }
     }
 
-    fn uncover(&mut self, h: usize) {
-        let mut i = self.up[h];
-        while i != h {
-            self.unhide(i);
-            i = self.up[i];
-        }
-        self.hnext[self.hprev[h]] = h;
-        self.hprev[self.hnext[h]] = h;
-    }
-
-    /// Does a bull on cell `id` touch a bull already on the board?
-    fn conflicts(&self, id: usize) -> bool {
+    /// A bull was placed on cell o: block its 3x3 neighborhood. Each
+    /// cell newly blocked (count 0 -> 1) has its whole option pulled
+    /// out of every list it is still in, so item sizes stay an exact
+    /// count of placeable cells. o's own option is never touched: its
+    /// non-branch nodes were already hidden by cover of the branch
+    /// item, and no future bull can land adjacent to o (those cells
+    /// are blocked right here), so nothing ever detaches o's nodes out
+    /// from under an ancestor's list iteration.
+    fn block_neighbors(&mut self, o: usize, sign: i32) {
         let n = self.n;
-        let (y, x) = (id / n, id % n);
+        let (y, x) = (o / n, o % n);
         for ny in y.saturating_sub(1)..=(y + 1).min(n - 1) {
             for nx in x.saturating_sub(1)..=(x + 1).min(n - 1) {
-                if (ny, nx) != (y, x) && self.placed[ny * n + nx] {
-                    return true;
+                let q = ny * n + nx;
+                if q == o {
+                    continue;
+                }
+                if sign > 0 {
+                    self.blocked[q] += 1;
+                    if self.blocked[q] == 1 {
+                        let base = self.first + 3 * q;
+                        for j in base..base + 3 {
+                            if self.attached[j] {
+                                self.detach(j);
+                            }
+                        }
+                    }
+                } else {
+                    // relinking is the trail's job (undo_to)
+                    self.blocked[q] -= 1;
                 }
             }
         }
-        false
     }
 
     fn solve_rec(&mut self, csol: &mut Vec<Pos>, sols: &mut Vec<Vec<Pos>>) {
-        // out of budget: abandon this subtree. Parents still restore
-        // their covers on the way out, so everything unwinds cleanly.
-        if self.steps == 0 {
-            return;
-        }
-        self.steps -= 1;
-
-        // Choose the item with the fewest ways to saturate it (MRV,
-        // measured as C(size, need) — a 4-option item needing 2 has 6
-        // candidate pairs, a full row has hundreds). Any item with more
-        // needs than options kills the branch outright.
+        // Choose the branch item by MRV: fewest spare options
+        // (size - need, Knuth's branching degree for multiplicities).
+        // Any item with more needs than options kills the branch
+        // outright — and since sizes are adjacency-aware, this is the
+        // same live-count prune that carries the Python solver.
         let mut best = 0;
-        let mut best_bf = u64::MAX;
+        let mut best_spare = usize::MAX;
         let mut h = self.hnext[0];
         while h != 0 {
             if self.size[h] < self.need[h] {
                 return; // item can no longer be satisfied
             }
-            let bf = choose_count(self.size[h], self.need[h]);
-            if bf < best_bf {
-                best_bf = bf;
+            let spare = self.size[h] - self.need[h];
+            if spare < best_spare {
+                best_spare = spare;
                 best = h;
             }
             h = self.hnext[h];
@@ -328,110 +453,77 @@ impl DoubleSolver {
 
         if best == 0 {
             // no active items left => every item got exactly k bulls
-            sols.push(csol.clone());
+            self.record(csol, sols);
             return;
         }
 
-        // Saturate `best` in one node: cover it, then enumerate all
-        // size-m subsets of its option list in list order (see module
-        // docs for why this replaces Knuth's tweak/untweak).
-        let m = self.need[best];
-        self.need[best] = 0;
-        self.cover(best);
-        self.pick(best, self.down[best], m, csol, sols);
-        self.uncover(best);
-        self.need[best] = m;
-    }
-
-    /// Choose `remaining` more options for item p from its vertical
-    /// list, starting at node `start` (list order => each subset is
-    /// enumerated exactly once). p is already covered, so p's list is
-    /// stable throughout: nested covers can never touch it — any option
-    /// still listed under another item has no p-node (cover(p) hid it).
-    fn pick(
-        &mut self,
-        p: usize,
-        start: usize,
-        remaining: usize,
-        csol: &mut Vec<Pos>,
-        sols: &mut Vec<Vec<Pos>>,
-    ) {
-        if remaining == 0 {
-            self.solve_rec(csol, sols);
-            return;
-        }
-
-        let mut i = start;
+        // Place ONE bull for `best`, trying its candidates in list
+        // order. Tried candidates stay tweaked off (detached from
+        // every list) while later ones run, so deeper picks for this
+        // item only come from further down the list — each K-subset
+        // is enumerated exactly once. All restored at loop end.
+        let p = best;
+        let mark_level = self.trail.len();
+        let mut i = self.down[p];
         while i != p {
-            if sols.len() >= 2 || self.steps == 0 {
-                return;
+            if sols.len() >= self.max_sols || self.steps == 0 {
+                break;
             }
 
             let o = self.opt[i];
             let base = self.first + 3 * o;
-            // Legal iff the cell touches no placed bull (this also
-            // rejects touching pairs within the current subset — the
-            // earlier pick is already on the board) and its other two
-            // items can still absorb a bull.
-            let legal = !self.conflicts(o)
-                && (base..base + 3).all(|j| j == i || self.need[self.col[j]] >= 1);
+            // Being in p's list means the option is fully attached:
+            // none of its items is saturated and no placed bull
+            // touches it (either would have detached it) — so it is
+            // legal as-is, no checks needed.
+            debug_assert!((base..base + 3).all(|j| self.attached[j]));
+            debug_assert_eq!(self.blocked[o], 0);
 
-            if legal {
-                // commit: the option's non-p items each get one bull;
-                // an item hitting 0 needs is saturated and covered.
-                // Nothing needs hiding here — cover(p) already hid this
-                // option from its other lists.
-                self.placed[o] = true;
-                csol.push((o / self.n, o % self.n));
-                for j in base..base + 3 {
-                    if j != i {
-                        let h = self.col[j];
-                        self.need[h] -= 1;
-                        if self.need[h] == 0 {
-                            self.cover(h);
-                        }
-                    }
-                }
-
-                self.pick(p, self.down[i], remaining - 1, csol, sols);
-
-                for j in (base..base + 3).rev() {
-                    if j != i {
-                        let h = self.col[j];
-                        if self.need[h] == 0 {
-                            self.uncover(h);
-                        }
-                        self.need[h] += 1;
-                    }
-                }
-                csol.pop();
-                self.placed[o] = false;
+            // tweak: pull the option out of every list (persists
+            // across this loop), then commit the placement.
+            for j in base..base + 3 {
+                self.detach(j);
             }
 
+            self.steps -= 1; // budget is charged per placement
+            let mark = self.trail.len();
+            csol.push((o / self.n, o % self.n));
+            self.block_neighbors(o, 1);
+            for j in base..base + 3 {
+                let h = self.col[j];
+                self.need[h] -= 1;
+                if self.need[h] == 0 {
+                    self.cover(h);
+                }
+            }
+
+            self.solve_rec(csol, sols);
+
+            for j in base..base + 3 {
+                self.need[self.col[j]] += 1;
+            }
+            self.block_neighbors(o, -1);
+            self.undo_to(mark);
+            csol.pop();
+
+            // the detached node's own pointer still names its old
+            // successor, which is back in the list by now
             i = self.down[i];
         }
+        self.undo_to(mark_level); // untweak every tried candidate
     }
-}
-
-/// Binomial coefficient C(s, m) for tiny m (callers guarantee s >= m).
-/// Multiplying before dividing keeps every intermediate integral.
-fn choose_count(s: usize, m: usize) -> u64 {
-    let mut r = 1u64;
-    for t in 0..m {
-        r = r * (s - t) as u64 / (t as u64 + 1);
-    }
-    r
 }
 
 // ---------------------------------------------------------- generator
 
 /// Generate an n x n double bullpen with exactly one K=2 solution.
 pub fn generate(n: usize, seed: u64) -> Grid {
-    generate_capped(n, seed, NUM_CAPPED)
+    generate_capped(n, seed, num_capped(n))
 }
 
 fn generate_capped(n: usize, seed: u64, caps: (usize, usize)) -> Grid {
     let mut rng = Rng::new(seed);
+    let mut solver: Option<DoubleSolver> = None;
 
     // Outer loop: reroll from scratch when a board is hopeless.
     loop {
@@ -439,29 +531,53 @@ fn generate_capped(n: usize, seed: u64, caps: (usize, usize)) -> Grid {
 
         // Two cheap necessary conditions before paying for a solve:
         // every region must fit K non-touching bulls, and regions must
-        // be capacity-K matchable against rows and columns.
+        // be flow-feasible against rows and columns.
         if !regions_feasible(&grid, K) || !matchable(&grid, K) {
             continue;
         }
 
+        // One solver for the whole run, relinked per board edit.
+        let solver = match solver.as_mut() {
+            Some(s) => {
+                s.reset(&grid);
+                s
+            }
+            None => solver.insert(DoubleSolver::new(&grid, K)),
+        };
+
+        // Fresh board: the full "0, 1, or 2+ solutions" question.
+        let sols = match solver.solve_within(SOLVE_BUDGET) {
+            Some(sols) => sols,
+            None => continue, // proof too expensive — discard the board
+        };
+        let (mut keep, mut other) = match &sols[..] {
+            [] => continue, // dead board
+            [_] => return grid,
+            [a, b, ..] => (a.clone(), b.clone()),
+        };
+
+        // Repair loop. From here on one solution is always known
+        // (keep survives every edit by construction), so each re-solve
+        // only has to hunt for a solution that differs from it.
         for _ in 0..MAX_REPAIRS {
-            let sols = match DoubleSolver::new(&grid, K).solve_within(SOLVE_BUDGET) {
-                Some(sols) => sols,
+            // Edit the grid to kill `other` and keep `keep`; if none
+            // of other's differing bulls is movable, try the symmetric
+            // edit (then the surviving solution is `other`).
+            if kill_solution(&mut grid, &keep, &other, &mut rng) {
+                // keep survives
+            } else if kill_solution(&mut grid, &other, &keep, &mut rng) {
+                std::mem::swap(&mut keep, &mut other);
+            } else {
+                break; // no legal edit in either direction, reroll
+            }
+
+            solver.reset(&grid);
+            let mut known = keep.clone();
+            known.sort_unstable();
+            match solver.solve_other_within(SOLVE_BUDGET, &known) {
                 None => break, // proof too expensive — discard the board
-            };
-            match sols.len() {
-                0 => break, // dead board (only possible on a fresh roll)
-                1 => return grid,
-                // 2 solutions: edit the grid to kill one and keep the
-                // other; if neither of sols[1]'s differing bulls is
-                // movable, try the symmetric edit.
-                _ => {
-                    if !kill_solution(&mut grid, &sols[0], &sols[1], &mut rng)
-                        && !kill_solution(&mut grid, &sols[1], &sols[0], &mut rng)
-                    {
-                        break; // no legal edit in either direction, reroll
-                    }
-                }
+                Some(None) => return grid, // keep is the unique solution
+                Some(Some(o)) => other = o,
             }
         }
     }
@@ -605,50 +721,105 @@ fn spread_exists(cells: &[Pos], k: usize, chosen: &mut Vec<Pos>) -> bool {
     false
 }
 
-/// Cheap necessary condition for solvability: regions must be matchable
-/// with the rows they touch (each region supplying k bulls, each row
-/// absorbing k), and likewise with columns. A board failing either
-/// check is provably unsolvable, no search needed. Note a region's two
-/// bulls MAY share a row, and the duplicated graph correctly allows it.
+/// Cheap necessary condition for solvability: k bulls per region must
+/// be routable to rows needing k bulls each (and likewise columns) —
+/// a flow problem: source -> region (cap k) -> row (cap = how many
+/// bulls that region can physically put in that row) -> sink (cap k).
+/// A solvable board admits flow k*n, so anything less is a proof of
+/// unsolvability, no search needed.
+///
+/// The edge capacity is what makes this stronger than plain matching:
+/// bulls in one row can't sit in adjacent columns, so a region's supply
+/// into a row is its max spread-out cell count there, not just "touches
+/// it". A region meeting a row in 2 adjacent cells supplies at most 1.
 fn matchable(grid: &Grid, k: usize) -> bool {
     let n = grid.len();
-    let mut rows = vec![vec![false; n]; n];
-    let mut cols = vec![vec![false; n]; n];
+    // caps[g][x] = max non-touching bulls region g can place in line x;
+    // within one line, cells touch iff consecutive, so a greedy skip
+    // count over the line's cells (visited in order) is exact.
+    let mut row_caps = vec![vec![0usize; n]; n];
+    let mut col_caps = vec![vec![0usize; n]; n];
+    let mut last = vec![[-2isize; 2]; n]; // per region: last counted row-/col-index
     for r in 0..n {
+        for reg in last.iter_mut() {
+            reg[0] = -2;
+        }
         for c in 0..n {
-            rows[grid[r][c]][r] = true;
-            cols[grid[r][c]][c] = true;
+            let g = grid[r][c];
+            if c as isize > last[g][0] + 1 {
+                row_caps[g][r] += 1;
+                last[g][0] = c as isize;
+            }
         }
     }
-    capacity_matching(&rows, k) && capacity_matching(&cols, k)
+    for c in 0..n {
+        for reg in last.iter_mut() {
+            reg[1] = -2;
+        }
+        for r in 0..n {
+            let g = grid[r][c];
+            if r as isize > last[g][1] + 1 {
+                col_caps[g][c] += 1;
+                last[g][1] = r as isize;
+            }
+        }
+    }
+    feasible_flow(&row_caps, k) && feasible_flow(&col_caps, k)
 }
 
-/// Perfect matching after duplicating every node k times — the standard
-/// node-splitting reduction of capacity-k b-matching to plain matching
-/// via augmenting paths.
-fn capacity_matching(touch: &[Vec<bool>], k: usize) -> bool {
-    fn augment(
-        a: usize,
-        k: usize,
-        touch: &[Vec<bool>],
-        seen: &mut [bool],
-        matched: &mut [usize],
-    ) -> bool {
-        for b in 0..matched.len() {
-            if touch[a / k][b / k] && !seen[b] {
-                seen[b] = true;
-                if matched[b] == usize::MAX || augment(matched[b], k, touch, seen, matched) {
-                    matched[b] = a;
-                    return true;
+/// Does k*n flow fit through source -> regions (cap k) -> lines (edge
+/// caps) -> sink (cap k)? Edmonds-Karp on a dense residual matrix —
+/// the graph has 2n+2 nodes and the target flow is only k*n.
+fn feasible_flow(edge_caps: &[Vec<usize>], k: usize) -> bool {
+    let n = edge_caps.len();
+    let v = 2 * n + 2;
+    let (s, t) = (2 * n, 2 * n + 1);
+    let mut cap = vec![vec![0usize; v]; v];
+    for g in 0..n {
+        cap[s][g] = k;
+        for x in 0..n {
+            cap[g][n + x] = edge_caps[g][x].min(k);
+        }
+    }
+    for x in 0..n {
+        cap[n + x][t] = k;
+    }
+
+    let mut flow = 0;
+    loop {
+        // BFS for an augmenting path in the residual graph
+        let mut prev = vec![usize::MAX; v];
+        prev[s] = s;
+        let mut queue = vec![s];
+        let mut qi = 0;
+        while qi < queue.len() && prev[t] == usize::MAX {
+            let u = queue[qi];
+            qi += 1;
+            for w in 0..v {
+                if prev[w] == usize::MAX && cap[u][w] > 0 {
+                    prev[w] = u;
+                    queue.push(w);
                 }
             }
         }
-        false
+        if prev[t] == usize::MAX {
+            break;
+        }
+        let mut bottleneck = usize::MAX;
+        let mut w = t;
+        while w != s {
+            bottleneck = bottleneck.min(cap[prev[w]][w]);
+            w = prev[w];
+        }
+        let mut w = t;
+        while w != s {
+            cap[prev[w]][w] -= bottleneck;
+            cap[w][prev[w]] += bottleneck;
+            w = prev[w];
+        }
+        flow += bottleneck;
     }
-
-    let nk = touch.len() * k;
-    let mut matched = vec![usize::MAX; nk];
-    (0..nk).all(|a| augment(a, k, touch, &mut vec![false; nk], &mut matched))
+    flow == k * n
 }
 
 // -------------------------------------------------------------- repair
@@ -988,7 +1159,7 @@ mod tests {
         let n = 7;
         let mut rng = Rng::new(7);
         for _ in 0..50 {
-            let grid = random_regions(n, &mut rng, NUM_CAPPED);
+            let grid = random_regions(n, &mut rng, num_capped(n));
             let expected = brute_force_k2(&grid);
             let got = DoubleSolver::new(&grid, 2).solve();
             assert_eq!(
@@ -1003,7 +1174,7 @@ mod tests {
     #[test]
     fn solver_is_reusable_after_solving() {
         let mut rng = Rng::new(3);
-        let grid = random_regions(10, &mut rng, NUM_CAPPED);
+        let grid = random_regions(10, &mut rng, num_capped(10));
         let mut solver = DoubleSolver::new(&grid, 2);
         let first = solver.solve().len();
         // links, needs, and bitmap must be fully restored: solving
@@ -1017,7 +1188,7 @@ mod tests {
         let n = 7;
         let mut rng = Rng::new(11);
         for _ in 0..200 {
-            let grid = random_regions(n, &mut rng, NUM_CAPPED);
+            let grid = random_regions(n, &mut rng, num_capped(n));
             if !regions_feasible(&grid, K) || !matchable(&grid, K) {
                 assert!(
                     DoubleSolver::new(&grid, K).solve().is_empty(),
@@ -1068,33 +1239,137 @@ mod tests {
         bench(12, 50);
     }
 
+    #[test]
+    #[ignore]
+    fn bench_n14() {
+        bench(14, 10);
+    }
+
+    /// Like generate_capped, but with a parameterized solve budget and
+    /// a wall-clock limit: returns None once the limit passes.
+    /// Generation time has a heavy tail, and a sweep would rather count
+    /// a timeout than wait one out (its time enters stats as the limit).
+    fn generate_limited(
+        n: usize,
+        seed: u64,
+        caps: (usize, usize),
+        budget: usize,
+        limit: std::time::Duration,
+    ) -> Option<Grid> {
+        let deadline = std::time::Instant::now() + limit;
+        let mut rng = Rng::new(seed);
+        let mut solver: Option<DoubleSolver> = None;
+
+        loop {
+            if std::time::Instant::now() > deadline {
+                return None;
+            }
+            let mut grid = random_regions(n, &mut rng, caps);
+            if !regions_feasible(&grid, K) || !matchable(&grid, K) {
+                continue;
+            }
+            let solver = match solver.as_mut() {
+                Some(s) => {
+                    s.reset(&grid);
+                    s
+                }
+                None => solver.insert(DoubleSolver::new(&grid, K)),
+            };
+            let sols = match solver.solve_within(budget) {
+                Some(sols) => sols,
+                None => continue,
+            };
+            let (mut keep, mut other) = match &sols[..] {
+                [] => continue,
+                [_] => return Some(grid),
+                [a, b, ..] => (a.clone(), b.clone()),
+            };
+            'repair: for _ in 0..MAX_REPAIRS {
+                if kill_solution(&mut grid, &keep, &other, &mut rng) {
+                } else if kill_solution(&mut grid, &other, &keep, &mut rng) {
+                    std::mem::swap(&mut keep, &mut other);
+                } else {
+                    break 'repair;
+                }
+                solver.reset(&grid);
+                let mut known = keep.clone();
+                known.sort_unstable();
+                match solver.solve_other_within(budget, &known) {
+                    None => break 'repair,
+                    Some(None) => return Some(grid),
+                    Some(Some(o)) => other = o,
+                }
+            }
+        }
+    }
+
+    /// Fixed seeds, medians, timeout-censored — heavy-tailed times make
+    /// small-sample means lie (one unlucky board dominates).
+    fn sweep<S: std::fmt::Debug + Copy>(
+        label: &str,
+        n: usize,
+        runs: u64,
+        settings: &[S],
+        limit_ms: u64,
+        gen: impl Fn(u64, S) -> Option<Grid>,
+    ) {
+        let limit = std::time::Duration::from_millis(limit_ms);
+        for &setting in settings {
+            let mut times: Vec<f64> = Vec::new();
+            let mut timeouts = 0;
+            for seed in 0..runs {
+                let t = std::time::Instant::now();
+                if gen(seed, setting).is_none() {
+                    timeouts += 1;
+                }
+                times.push((t.elapsed().min(limit)).as_secs_f64() * 1000.0);
+            }
+            times.sort_by(f64::total_cmp);
+            let median = times[times.len() / 2];
+            let mean = times.iter().sum::<f64>() / times.len() as f64;
+            println!(
+                "n={} {}={:?}: median={:.0} ms, mean={:.0} ms, timeouts={}/{}",
+                n, label, setting, median, mean, timeouts, runs
+            );
+        }
+    }
+
     /// Not run by default. Find the cap-count sweet spot for a size.
     #[test]
     #[ignore]
     fn sweep_caps_n10() {
-        sweep_caps(10, 20);
+        let caps = [(3, 5), (4, 6), (5, 7), (6, 8), (7, 9), (8, 10)];
+        sweep("caps", 10, 60, &caps, 1_000, |seed, c| {
+            generate_limited(10, seed, c, SOLVE_BUDGET, std::time::Duration::from_millis(1_000))
+        });
     }
 
     #[test]
     #[ignore]
     fn sweep_caps_n12() {
-        sweep_caps(12, 20);
+        let caps = [(5, 7), (6, 8), (7, 9), (8, 10), (9, 11), (10, 12)];
+        sweep("caps", 12, 40, &caps, 3_000, |seed, c| {
+            generate_limited(12, seed, c, SOLVE_BUDGET, std::time::Duration::from_millis(3_000))
+        });
     }
 
-    fn sweep_caps(n: usize, runs: u64) {
-        for caps in [(0, 0), (2, 4), (4, 6), (5, 7), (6, 8), (8, 10)] {
-            let start = std::time::Instant::now();
-            for seed in 0..runs {
-                generate_capped(n, seed, caps);
-            }
-            println!(
-                "n={} caps={:?} size={:?}: {:?} avg",
-                n,
-                caps,
-                CAP_SIZE,
-                start.elapsed() / runs as u32
-            );
-        }
+    #[test]
+    #[ignore]
+    fn sweep_caps_n14() {
+        let caps = [(9, 11), (10, 12), (11, 13), (12, 14), (13, 14), (14, 14)];
+        sweep("caps", 14, 30, &caps, 8_000, |seed, c| {
+            generate_limited(14, seed, c, SOLVE_BUDGET, std::time::Duration::from_millis(8_000))
+        });
+    }
+
+    /// Not run by default. How hard should the budget censor tails?
+    #[test]
+    #[ignore]
+    fn sweep_budget_n14() {
+        let budgets = [1_000usize, 2_000, 5_000, 10_000, 25_000];
+        sweep("budget", 14, 30, &budgets, 8_000, |seed, b| {
+            generate_limited(14, seed, num_capped(14), b, std::time::Duration::from_millis(8_000))
+        });
     }
 
     /// Not run by default. Where does generation time go?
@@ -1110,6 +1385,12 @@ mod tests {
         breakdown(12, 30);
     }
 
+    #[test]
+    #[ignore]
+    fn breakdown_n14() {
+        breakdown(14, 10);
+    }
+
     fn breakdown(n: usize, target: usize) {
         use std::time::{Duration, Instant};
 
@@ -1121,10 +1402,11 @@ mod tests {
         let mut solve_time = Duration::ZERO;
         let mut grow_time = Duration::ZERO;
 
+        let mut solver: Option<DoubleSolver> = None;
         let mut done = 0;
         while done < target {
             let t = Instant::now();
-            let mut grid = random_regions(n, &mut rng, NUM_CAPPED);
+            let mut grid = random_regions(n, &mut rng, num_capped(n));
             grow_time += t.elapsed();
 
             if !regions_feasible(&grid, K) || !matchable(&grid, K) {
@@ -1133,36 +1415,64 @@ mod tests {
                 continue;
             }
 
+            let solver = match solver.as_mut() {
+                Some(s) => {
+                    s.reset(&grid);
+                    s
+                }
+                None => solver.insert(DoubleSolver::new(&grid, K)),
+            };
+
+            let t = Instant::now();
+            let sols = solver.solve_within(SOLVE_BUDGET);
+            solve_time += t.elapsed();
+            solves += 1;
+
+            let (mut keep, mut other) = match sols.as_deref() {
+                None => {
+                    over_budget += 1;
+                    rerolls += 1;
+                    continue;
+                }
+                Some([]) => {
+                    zero_sol += 1;
+                    rerolls += 1;
+                    continue;
+                }
+                Some([_]) => {
+                    done += 1;
+                    continue;
+                }
+                Some([a, b, ..]) => (a.clone(), b.clone()),
+            };
+
             let mut ok = false;
             for _ in 0..MAX_REPAIRS {
+                if kill_solution(&mut grid, &keep, &other, &mut rng) {
+                } else if kill_solution(&mut grid, &other, &keep, &mut rng) {
+                    std::mem::swap(&mut keep, &mut other);
+                } else {
+                    break;
+                }
+                repairs += 1;
+
+                solver.reset(&grid);
+                let mut known = keep.clone();
+                known.sort_unstable();
                 let t = Instant::now();
-                let sols = DoubleSolver::new(&grid, K).solve_within(SOLVE_BUDGET);
+                let res = solver.solve_other_within(SOLVE_BUDGET, &known);
                 solve_time += t.elapsed();
                 solves += 1;
-                let sols = match sols {
-                    Some(sols) => sols,
+                match res {
                     None => {
                         over_budget += 1;
                         break;
                     }
-                };
-                match sols.len() {
-                    0 => {
-                        zero_sol += 1;
-                        break;
-                    }
-                    1 => {
+                    Some(None) => {
                         ok = true;
                         break;
                     }
-                    _ => {
-                        repairs += 1;
-                        if !kill_solution(&mut grid, &sols[0], &sols[1], &mut rng)
-                            && !kill_solution(&mut grid, &sols[1], &sols[0], &mut rng)
-                        {
-                            break;
-                        }
-                    }
+                    Some(Some(o)) => other = o,
                 }
             }
             if ok {

@@ -63,7 +63,7 @@ impl GenPen {
             self.clear();
             timed!(self.t_regions, self.gen_regions());
 
-            // ~96% of boards are NOT SOLVABLE!
+            // ~96% of boards are NOT SOLVABLE at n=20!
             if !timed!(self.t_solvable, self.solvable()) {
                 bump!(self.unsolvable);
                 continue;

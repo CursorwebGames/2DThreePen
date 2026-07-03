@@ -42,7 +42,7 @@ fn main() {
             let ch = if stars.contains(&(y, x)) {
                 "★".to_string()
             } else {
-                cell.to_string()
+                ".".to_string()
             };
             print!("{color}{ch}{RESET} ");
         }
