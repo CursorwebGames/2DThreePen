@@ -9,6 +9,7 @@ let solver: Solver;
 const hintDesc = document.querySelector(".hint-desc") as HTMLDivElement;
 
 const MAX_CANVAS = 50 * 8 + 2 * REGION_BORDER;
+
 function getCanvasSize() {
     return Math.min(window.innerWidth - 32, window.innerHeight - 32, MAX_CANVAS);
 }

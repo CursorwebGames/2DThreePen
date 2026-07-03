@@ -1,9 +1,12 @@
 mod cell;
 mod gen_single;
+#[cfg(not(target_arch = "wasm32"))]
+mod stats;
 pub mod genpenai;
 mod llist;
 mod matrix;
 mod single_solver;
+#[cfg(debug_assertions)]
 mod utils;
 
 use fastrand::Rng;
@@ -11,7 +14,7 @@ use wasm_bindgen::prelude::*;
 
 pub use gen_single::GenPen;
 #[cfg(not(target_arch = "wasm32"))]
-pub use gen_single::Stats;
+pub use stats::{Aggregator, Stats};
 pub use single_solver::SingleSolver;
 
 #[wasm_bindgen(start)]

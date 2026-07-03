@@ -5,7 +5,7 @@
 //! Prints the slowest GenPen boards with their internal counters (so you
 //! can see whether a tail is a reroll storm or an expensive solve), and
 //! writes every per-board timing to `times.csv` for compare_stats.py.
-
+/*
 use bullpen::{genpenai, GenPen, Stats};
 use fastrand::Rng;
 use std::fs::File;
@@ -104,4 +104,9 @@ fn main() {
         writeln!(w, "genpenai,{},{},{:.4}", N, seed, ms).unwrap();
     }
     println!("\nWrote {} rows to times.csv", 2 * RUNS);
+}
+*/
+fn main() {
+    println!("todo!");
+    todo!();
 }

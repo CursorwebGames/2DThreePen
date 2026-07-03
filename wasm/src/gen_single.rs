@@ -2,7 +2,7 @@ use std::{collections::VecDeque, ops::RangeInclusive};
 
 use fastrand::Rng;
 
-use crate::single_solver::SingleSolver;
+use crate::{bump, single_solver::SingleSolver, timed};
 
 const EMPTY: usize = usize::MAX;
 
@@ -16,56 +16,8 @@ const CAP_SIZE: RangeInclusive<usize> = 1..=3;
 /// (y, x)
 type Pos = (usize, usize);
 
-/// Per-`gen` counters
 #[cfg(not(target_arch = "wasm32"))]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct Stats {
-    /// boards attempted
-    pub rolls: usize,
-    /// rolls rejected by the cheap matching prefilter
-    pub unsolvable: usize,
-    /// solver invocations
-    pub solves: usize,
-    /// solves that hit SOLVE_BUDGET and were abandoned
-    pub over_budget: usize,
-    /// num. of region edits applied
-    pub repairs: usize,
-    /// cumulative time growing regions
-    pub t_regions: std::time::Duration,
-    /// cumulative time in the matching prefilter
-    pub t_solvable: std::time::Duration,
-    /// cumulative time in the solver
-    pub t_solve: std::time::Duration,
-    /// cumulative time in repair (`kill_sol`)
-    pub t_kill: std::time::Duration,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-macro_rules! timed {
-    ($self:ident.$field:ident, $body:expr) => {{
-        let time = std::time::Instant::now();
-        let out = $body;
-        $self.stats.$field += time.elapsed();
-        out
-    }};
-}
-#[cfg(target_arch = "wasm32")]
-macro_rules! timed {
-    ($self:ident.$field:ident, $body:expr) => {
-        $body
-    };
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-macro_rules! bump {
-    ($self:ident.$field:ident) => {
-        $self.stats.$field += 1;
-    };
-}
-#[cfg(target_arch = "wasm32")]
-macro_rules! bump {
-    ($self:ident.$field:ident) => {};
-}
+use crate::stats::Stats;
 
 pub struct GenPen {
     rng: Rng,
@@ -91,9 +43,17 @@ impl GenPen {
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.stats = Stats::default();
+            let t = std::time::Instant::now();
+            self.init_grid();
+            self.gen_puzzle();
+            self.stats.ms = t.elapsed().as_secs_f64() * 1000.0;
         }
-        self.init_grid();
-        self.gen_puzzle();
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.init_grid();
+            self.gen_puzzle();
+        }
         std::mem::take(&mut self.grid)
     }
 
@@ -109,6 +69,8 @@ impl GenPen {
                 continue;
             }
 
+            #[cfg(not(target_arch = "wasm32"))]
+            let mut local_repairs = 0usize;
             for _ in 0..MAX_REPAIRS {
                 bump!(self.solves);
                 let sols = match timed!(
@@ -121,14 +83,29 @@ impl GenPen {
                         break; // too expensive
                     }
                 };
+
                 match sols.len() {
                     0 => break,
-                    1 => return, // yay!
+                    1 => {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            self.stats.success_repairs = local_repairs;
+                        }
+                        return; // yay!
+                    }
                     _ => {
                         bump!(self.repairs);
-                        let killed = timed!(self.t_kill, self.kill_sol(&sols[0], &sols[1]))
-                            || timed!(self.t_kill, self.kill_sol(&sols[1], &sols[0]));
-                        if !killed {
+                        let killed = if timed!(self.t_kill, self.kill_sol(&sols[0], &sols[1])) {
+                            true
+                        } else {
+                            bump!(self.kill_fallback);
+                            timed!(self.t_kill, self.kill_sol(&sols[1], &sols[0]))
+                        };
+
+                        if killed {
+                            bump!(local_repairs);
+                        } else {
+                            // couldn't cull anything
                             break;
                         }
                     }
@@ -176,6 +153,7 @@ impl GenPen {
 
         // real chance capped regions don't fully fill the board (walled off)
         if sizes.iter().sum::<usize>() < n * n {
+            bump!(self.secondary_fills);
             let mut queue: VecDeque<Pos> = (0..n)
                 .flat_map(|y| (0..n).map(move |x| (y, x)))
                 .filter(|&(y, x)| self.grid[y][x] == EMPTY)
