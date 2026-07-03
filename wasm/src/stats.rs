@@ -55,6 +55,8 @@ define_stats! {
     kill_fallback: usize,
     /// num of repairs on successful board
     success_repairs: usize,
+    /// total recursion steps across all solver invocations
+    solver_steps: usize,
     /// cumulative time growing regions (ms)
     t_regions: f64,
     /// cumulative time in the matching prefilter (ms)
@@ -90,6 +92,9 @@ macro_rules! bump {
     ($self:ident.$field:ident) => {
         $self.stats.$field += 1;
     };
+    ($self:ident.$field:ident, $amt:expr) => {
+        $self.stats.$field += $amt;
+    };
     ($field:ident) => {
         $field += 1;
     };
@@ -99,5 +104,6 @@ macro_rules! bump {
 #[macro_export]
 macro_rules! bump {
     ($self:ident.$field:ident) => {};
+    ($self:ident.$field:ident, $amt:expr) = {};
     ($field:ident) => {};
 }

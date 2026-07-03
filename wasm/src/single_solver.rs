@@ -12,7 +12,7 @@ pub struct SingleSolver {
 
     /// Remaining work budget for the current solve call;
     /// `solve_rec` stops exploring when it reaches 0
-    steps: usize,
+    pub steps: usize,
 }
 
 impl SingleSolver {

@@ -73,16 +73,16 @@ impl GenPen {
             let mut local_repairs = 0usize;
             for _ in 0..MAX_REPAIRS {
                 bump!(self.solves);
-                let sols = match timed!(
-                    self.t_solve,
-                    SingleSolver::new(&self.grid).solve_within(SOLVE_BUDGET)
-                ) {
+                let mut solver = SingleSolver::new(&self.grid);
+                let sols = match timed!(self.t_solve, solver.solve_within(SOLVE_BUDGET)) {
                     Some(sols) => sols,
                     None => {
                         bump!(self.over_budget);
+                        bump!(self.solver_steps, SOLVE_BUDGET);
                         break; // too expensive
                     }
                 };
+                bump!(self.solver_steps, SOLVE_BUDGET - solver.steps);
 
                 match sols.len() {
                     0 => break,
