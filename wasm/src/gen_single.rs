@@ -7,8 +7,8 @@ use crate::{bump, single_solver::SingleSolver, timed};
 const EMPTY: usize = usize::MAX;
 
 // TODO: investigate if changing these numbers affects speed
-const MAX_REPAIRS: usize = 50;
-const SOLVE_BUDGET: usize = 50_000;
+const MAX_REPAIRS: usize = 35;
+const SOLVE_BUDGET: usize = 25_000;
 
 // TODO: how fun is it if we have an optimal number?
 const CAP_SIZE: RangeInclusive<usize> = 1..=3;
