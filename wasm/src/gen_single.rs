@@ -172,6 +172,7 @@ impl GenPen {
         }
     }
 
+    /// Assigns cell a region, and pushes neighbors into frontier
     fn claim(
         &mut self,
         frontier: &mut Vec<(Pos, usize)>,

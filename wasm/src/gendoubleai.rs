@@ -49,9 +49,13 @@
 //! the reverse order they were broken, no matter which mechanism
 //! (item cover or adjacency hiding) broke them.
 //!
-//! This file is self-contained (own RNG, solver, and generator), so
-//! besides `cargo test` it can also be compiled and tested standalone
-//! with `rustc --test -O wasm/src/gendoubleai.rs -o gendouble_test`.
+//! The solver is built on the crate's shared dancing-links structures
+//! (matrix.rs / llist.rs / cell.rs) — the same Matrix the K=1
+//! SingleSolver searches; test with
+//! `cargo test --release --lib gendoubleai -- --nocapture`.
+
+use crate::cell::Cell;
+use crate::matrix::{Matrix, H};
 
 /// Bulls per row, column, and region. Kept as a runtime parameter on
 /// the solver so K=3 ("threepen") falls out later; the generator's
@@ -99,8 +103,10 @@ const CAP_SIZE: (usize, usize) = (3, 9);
 /// L-tromino still fails) — `regions_feasible` is the real check.
 const MIN_REGION: usize = 3;
 
-/// Small deterministic RNG (SplitMix64), duplicated from genpenai.rs so
-/// this prototype stays standalone.
+/// Small deterministic RNG (SplitMix64), duplicated from genpenai.rs
+/// because its methods are private there (as are the generator helpers
+/// below: orth_neighbors, shuffle, stays_contiguous, kill_solution).
+/// TODO: make genpenai's pub(crate) and share them instead.
 pub struct Rng(u64);
 
 impl Rng {
@@ -129,50 +135,43 @@ impl Rng {
 
 // ------------------------------------------------- Algorithm M solver
 
-/// Exact cover with multiplicities over dancing links.
+/// Exact cover with multiplicities over the crate's dancing-links
+/// `Matrix` (matrix.rs / llist.rs / cell.rs) — the same structure the
+/// K=1 `SingleSolver` searches with Algorithm X.
 ///
-/// Items (3n of them): one per board row, per board column, per region;
-/// each must be covered exactly `k` times. Options (n^2 of them): one
-/// per cell — placing a bull on (r, c) covers items r, n+c, 2n+g once
-/// each, and hides every option adjacent to (r, c). A set of options
-/// covering every item exactly k times is a solution.
+/// Items = matrix columns (3n): one per board row, per board column,
+/// per region; each must be covered exactly `k` times. Options =
+/// matrix rows (n^2): one per cell — a bull on (r, c) in region g
+/// covers columns r, n+c, 2n+g. A set of matrix rows covering every
+/// column exactly k times is a solution.
 ///
-/// Node layout: everything lives in flat arrays indexed by node id.
-/// Id 0 is the horizontal sentinel, ids 1..=3n are the item headers,
-/// and option o (cell r*n+c) owns the three consecutive ids
-/// `first + 3o .. first + 3o + 3` — so an option's sibling nodes are
-/// found by arithmetic instead of horizontal links.
+/// What Algorithm M adds on top of the shared Matrix:
+/// - `need` per column: a column leaves the header list only when its
+///   need hits 0 (Algorithm X is the special case need = 1).
+/// - `blocked` counts: placing a bull detaches every option within
+///   Chebyshev distance 1 from all lists, so column sizes only count
+///   genuinely placeable cells.
+/// - a trail instead of Matrix::cover/uncover: covering and adjacency
+///   hiding can race for the same node, so every unlink (guarded by
+///   `attached`) is pushed onto one stack and backtracking pops to a
+///   mark — strict LIFO makes the mixed undo exact.
+///
+/// One layout fact this leans on: `Matrix` allocates node ids
+/// sequentially (0 = H, 1..=3n = column headers, then 3 nodes per
+/// added row), so option o's nodes are exactly `Cell(3n+1 + 3o + t)`
+/// — siblings by arithmetic, complementing the x-links.
 pub struct DoubleSolver {
+    m: Matrix,
     n: usize,
-    k: usize,
 
     /// Id of the first option node (= 3n + 1).
     first: usize,
 
-    /// Horizontal doubly-linked list of *active* item headers (an item
-    /// leaves this list exactly when its `need` hits 0).
-    hprev: Vec<usize>,
-    hnext: Vec<usize>,
-
-    /// Vertical doubly-linked list per item: header + available option
-    /// nodes.
-    up: Vec<usize>,
-    down: Vec<usize>,
-
-    /// Option node -> its item header id.
-    col: Vec<usize>,
-
-    /// Option node -> its option id (cell index r*n + c).
-    opt: Vec<usize>,
-
-    /// Per header: option nodes still in its vertical list.
-    size: Vec<usize>,
-
-    /// Per header: bulls this item still needs. This is Algorithm M's
+    /// Per column: bulls it still needs. This is Algorithm M's
     /// multiplicity — Algorithm X is the special case need = 1.
     need: Vec<usize>,
 
-    /// Per option node: currently linked into its vertical list. Both
+    /// Per node: currently linked into its vertical list. Both
     /// unlinking mechanisms (cover and adjacency hiding) can race for
     /// the same node; this flag makes "detach if attached" safe.
     attached: Vec<bool>,
@@ -183,9 +182,9 @@ pub struct DoubleSolver {
     /// gendouble.py). A cell's options are hidden while blocked > 0.
     blocked: Vec<u32>,
 
-    /// Undo trail: node ids detached (and header ids de-listed, told
-    /// apart by id < first) since the search began, in order.
-    trail: Vec<usize>,
+    /// Undo trail: nodes detached from y lists (and column headers
+    /// removed from the x list, told apart by id < first), in order.
+    trail: Vec<Cell>,
 
     /// Stop searching after this many solutions (2 for counting, 1
     /// when hunting for a solution other than a known one).
@@ -204,78 +203,50 @@ pub struct DoubleSolver {
 
 impl DoubleSolver {
     /// Takes an n x n region grid with labels 0..n.
+    ///
+    /// TODO: bring back `reset(&grid)` (relink in place, reusing every
+    /// buffer). The repair loop re-solves dozens of times per board
+    /// with one cell's region changed, and paying a full Matrix
+    /// construction per solve cost ~10-15% end to end when measured.
+    /// Needs a small clear/rebuild-in-place helper on Matrix — which
+    /// would benefit SingleSolver equally, since genpenai.rs also
+    /// constructs a fresh solver per repair re-solve.
     pub fn new(grid: &Grid, k: usize) -> DoubleSolver {
         let n = grid.len();
-        let cols = 3 * n;
-        let first = cols + 1;
-        let total = first + 3 * n * n;
-
-        let mut s = DoubleSolver {
-            n,
-            k,
-            first,
-            hprev: vec![0; cols + 1],
-            hnext: vec![0; cols + 1],
-            up: vec![0; total],
-            down: vec![0; total],
-            col: vec![0; total],
-            opt: vec![0; total],
-            size: vec![0; cols + 1],
-            need: vec![0; cols + 1],
-            attached: vec![false; total],
-            blocked: vec![0; n * n],
-            trail: Vec::new(),
-            max_sols: 2,
-            skip: None,
-            steps: usize::MAX,
-        };
-        s.reset(grid);
-        s
-    }
-
-    /// Relink the whole structure for `grid`, reusing every buffer.
-    /// The repair loop re-solves the same board dozens of times with
-    /// one cell's region changed per edit; this makes each re-solve
-    /// allocation-free instead of rebuilding the solver from scratch.
-    pub fn reset(&mut self, grid: &Grid) {
-        let n = self.n;
-        assert_eq!(grid.len(), n, "reset grid must match the solver's n");
-        let cols = 3 * n;
-
-        for i in 0..=cols {
-            self.hprev[i] = if i == 0 { cols } else { i - 1 };
-            self.hnext[i] = if i == cols { 0 } else { i + 1 };
-            self.up[i] = i;
-            self.down[i] = i;
-            self.size[i] = 0;
-            self.need[i] = self.k;
-        }
-        self.need[0] = 0; // sentinel is not an item
-        self.trail.clear();
-        self.blocked.iter_mut().for_each(|b| *b = 0);
-
+        let mut m = Matrix::new(3 * n);
+        let mut mrow = vec![false; 3 * n];
         for r in 0..n {
             assert_eq!(grid[r].len(), n, "grid must be an n x n square");
             for c in 0..n {
                 let g = grid[r][c];
                 assert!(g < n, "region labels must be 0..n");
-                let o = r * n + c;
-                // items covered by a bull on this cell
-                let items = [1 + r, 1 + n + c, 1 + 2 * n + g];
-                for (t, &h) in items.iter().enumerate() {
-                    let nd = self.first + 3 * o + t;
-                    self.col[nd] = h;
-                    self.opt[nd] = o;
-                    self.attached[nd] = true;
-                    // append at the bottom of h's vertical list
-                    let bottom = self.up[h];
-                    self.down[bottom] = nd;
-                    self.up[nd] = bottom;
-                    self.down[nd] = h;
-                    self.up[h] = nd;
-                    self.size[h] += 1;
-                }
+                mrow.fill(false);
+                mrow[r] = true; // row constraint
+                mrow[n + c] = true; // column constraint
+                mrow[2 * n + g] = true; // region constraint
+                m.add_row(&mrow);
             }
+        }
+
+        let first = 3 * n + 1;
+        let total = m.c.len();
+        // the sibling-by-arithmetic shortcut relies on this layout
+        debug_assert_eq!(total, first + 3 * n * n);
+
+        let mut need = vec![k; first];
+        need[H.0] = 0; // the sentinel is not an item
+
+        DoubleSolver {
+            m,
+            n,
+            first,
+            need,
+            attached: vec![true; total],
+            blocked: vec![0; n * n],
+            trail: Vec::new(),
+            max_sols: 2,
+            skip: None,
+            steps: usize::MAX,
         }
     }
 
@@ -343,66 +314,65 @@ impl DoubleSolver {
         sols.push(csol.to_vec());
     }
 
-    /// Detach option node j from its vertical list, recording it on the
-    /// trail so `undo_to` can relink it later.
-    fn detach(&mut self, j: usize) {
-        debug_assert!(self.attached[j]);
-        self.attached[j] = false;
-        self.down[self.up[j]] = self.down[j];
-        self.up[self.down[j]] = self.up[j];
-        self.size[self.col[j]] -= 1;
+    /// The three nodes of option o, one per covered column.
+    fn nodes(&self, o: usize) -> [Cell; 3] {
+        let base = self.first + 3 * o;
+        [Cell(base), Cell(base + 1), Cell(base + 2)]
+    }
+
+    /// Detach node j from its column's vertical list, recording it on
+    /// the trail so `undo_to` can relink it later.
+    fn detach(&mut self, j: Cell) {
+        debug_assert!(self.attached[j.0]);
+        self.attached[j.0] = false;
+        self.m.y.remove(j);
+        self.m.size[self.m.c[j]] -= 1;
         self.trail.push(j);
     }
 
     /// Undo every detach/de-list since the trail was `mark` entries
     /// long. Popping restores in exact reverse order, which is what
-    /// dancing-links relinking requires (a detached node's own links
+    /// dancing-links relinking requires (a removed node's own links
     /// still point at its old neighbors).
     fn undo_to(&mut self, mark: usize) {
         while self.trail.len() > mark {
             let j = self.trail.pop().unwrap();
-            if j < self.first {
-                // header: relink into the horizontal list
-                self.hnext[self.hprev[j]] = j;
-                self.hprev[self.hnext[j]] = j;
+            if j.0 < self.first {
+                self.m.x.restore(j); // column header back into the x list
             } else {
-                self.attached[j] = true;
-                self.down[self.up[j]] = j;
-                self.up[self.down[j]] = j;
-                self.size[self.col[j]] += 1;
+                self.attached[j.0] = true;
+                self.m.y.restore(j);
+                self.m.size[self.m.c[j]] += 1;
             }
         }
     }
 
-    /// Item h is saturated: remove it from the header list and hide all
-    /// its remaining options from other items' lists. Identical to
-    /// Algorithm X's cover — the difference is only *when* it is called
-    /// (need hitting 0, not the first pick). Undone via the trail.
-    fn cover(&mut self, h: usize) {
+    /// Column h is saturated: remove it from the header list and hide
+    /// all its remaining options from other columns' lists. Identical
+    /// to Algorithm X's cover — the difference is only *when* it is
+    /// called (need hitting 0, not the first pick) and that it is
+    /// undone via the trail, not a mirrored uncover.
+    fn cover(&mut self, h: Cell) {
         self.trail.push(h);
-        self.hnext[self.hprev[h]] = self.hnext[h];
-        self.hprev[self.hnext[h]] = self.hprev[h];
-        let mut i = self.down[h];
-        while i != h {
-            let base = self.first + 3 * self.opt[i];
-            for j in base..base + 3 {
+        self.m.x.remove(h);
+        let mut i = self.m.y.cursor(h);
+        while let Some(i) = i.next(&self.m.y) {
+            for j in self.nodes(self.m.row_id[i]) {
                 // adjacency hiding may have beaten us to a sibling
-                if j != i && self.attached[j] {
+                if j != i && self.attached[j.0] {
                     self.detach(j);
                 }
             }
-            i = self.down[i];
         }
     }
 
     /// A bull was placed on cell o: block its 3x3 neighborhood. Each
     /// cell newly blocked (count 0 -> 1) has its whole option pulled
-    /// out of every list it is still in, so item sizes stay an exact
-    /// count of placeable cells. o's own option is never touched: its
-    /// non-branch nodes were already hidden by cover of the branch
-    /// item, and no future bull can land adjacent to o (those cells
-    /// are blocked right here), so nothing ever detaches o's nodes out
-    /// from under an ancestor's list iteration.
+    /// out of every list it is still in, so column sizes stay an exact
+    /// count of placeable cells. o's own option is never touched: it
+    /// was already detached by the tweak, and no future bull can land
+    /// adjacent to o (those cells are blocked right here), so nothing
+    /// ever detaches o's nodes out from under an ancestor's iteration.
     fn block_neighbors(&mut self, o: usize, sign: i32) {
         let n = self.n;
         let (y, x) = (o / n, o % n);
@@ -415,9 +385,8 @@ impl DoubleSolver {
                 if sign > 0 {
                     self.blocked[q] += 1;
                     if self.blocked[q] == 1 {
-                        let base = self.first + 3 * q;
-                        for j in base..base + 3 {
-                            if self.attached[j] {
+                        for j in self.nodes(q) {
+                            if self.attached[j.0] {
                                 self.detach(j);
                             }
                         }
@@ -431,28 +400,27 @@ impl DoubleSolver {
     }
 
     fn solve_rec(&mut self, csol: &mut Vec<Pos>, sols: &mut Vec<Vec<Pos>>) {
-        // Choose the branch item by MRV: fewest spare options
+        // Choose the branch column by MRV: fewest spare options
         // (size - need, Knuth's branching degree for multiplicities).
-        // Any item with more needs than options kills the branch
+        // Any column with more needs than options kills the branch
         // outright — and since sizes are adjacency-aware, this is the
         // same live-count prune that carries the Python solver.
-        let mut best = 0;
+        let mut best = H;
         let mut best_spare = usize::MAX;
-        let mut h = self.hnext[0];
-        while h != 0 {
-            if self.size[h] < self.need[h] {
-                return; // item can no longer be satisfied
+        let mut cur = self.m.x.cursor(H);
+        while let Some(h) = cur.next(&self.m.x) {
+            if self.m.size[h] < self.need[h] {
+                return; // column can no longer be satisfied
             }
-            let spare = self.size[h] - self.need[h];
+            let spare = self.m.size[h] - self.need[h];
             if spare < best_spare {
                 best_spare = spare;
                 best = h;
             }
-            h = self.hnext[h];
         }
 
-        if best == 0 {
-            // no active items left => every item got exactly k bulls
+        if best == H {
+            // no active columns left => every column got exactly k bulls
             self.record(csol, sols);
             return;
         }
@@ -460,28 +428,27 @@ impl DoubleSolver {
         // Place ONE bull for `best`, trying its candidates in list
         // order. Tried candidates stay tweaked off (detached from
         // every list) while later ones run, so deeper picks for this
-        // item only come from further down the list — each K-subset
+        // column only come from further down the list — each K-subset
         // is enumerated exactly once. All restored at loop end.
         let p = best;
         let mark_level = self.trail.len();
-        let mut i = self.down[p];
+        let mut i = self.m.y[p].next;
         while i != p {
             if sols.len() >= self.max_sols || self.steps == 0 {
                 break;
             }
 
-            let o = self.opt[i];
-            let base = self.first + 3 * o;
+            let o = self.m.row_id[i];
             // Being in p's list means the option is fully attached:
-            // none of its items is saturated and no placed bull
+            // none of its columns is saturated and no placed bull
             // touches it (either would have detached it) — so it is
             // legal as-is, no checks needed.
-            debug_assert!((base..base + 3).all(|j| self.attached[j]));
+            debug_assert!(self.nodes(o).iter().all(|j| self.attached[j.0]));
             debug_assert_eq!(self.blocked[o], 0);
 
             // tweak: pull the option out of every list (persists
             // across this loop), then commit the placement.
-            for j in base..base + 3 {
+            for j in self.nodes(o) {
                 self.detach(j);
             }
 
@@ -489,8 +456,8 @@ impl DoubleSolver {
             let mark = self.trail.len();
             csol.push((o / self.n, o % self.n));
             self.block_neighbors(o, 1);
-            for j in base..base + 3 {
-                let h = self.col[j];
+            for j in self.nodes(o) {
+                let h = self.m.c[j];
                 self.need[h] -= 1;
                 if self.need[h] == 0 {
                     self.cover(h);
@@ -499,16 +466,16 @@ impl DoubleSolver {
 
             self.solve_rec(csol, sols);
 
-            for j in base..base + 3 {
-                self.need[self.col[j]] += 1;
+            for j in self.nodes(o) {
+                self.need[self.m.c[j]] += 1;
             }
             self.block_neighbors(o, -1);
             self.undo_to(mark);
             csol.pop();
 
-            // the detached node's own pointer still names its old
+            // the removed node's own link still names its old
             // successor, which is back in the list by now
-            i = self.down[i];
+            i = self.m.y[i].next;
         }
         self.undo_to(mark_level); // untweak every tried candidate
     }
@@ -523,7 +490,6 @@ pub fn generate(n: usize, seed: u64) -> Grid {
 
 fn generate_capped(n: usize, seed: u64, caps: (usize, usize)) -> Grid {
     let mut rng = Rng::new(seed);
-    let mut solver: Option<DoubleSolver> = None;
 
     // Outer loop: reroll from scratch when a board is hopeless.
     loop {
@@ -536,17 +502,8 @@ fn generate_capped(n: usize, seed: u64, caps: (usize, usize)) -> Grid {
             continue;
         }
 
-        // One solver for the whole run, relinked per board edit.
-        let solver = match solver.as_mut() {
-            Some(s) => {
-                s.reset(&grid);
-                s
-            }
-            None => solver.insert(DoubleSolver::new(&grid, K)),
-        };
-
         // Fresh board: the full "0, 1, or 2+ solutions" question.
-        let sols = match solver.solve_within(SOLVE_BUDGET) {
+        let sols = match DoubleSolver::new(&grid, K).solve_within(SOLVE_BUDGET) {
             Some(sols) => sols,
             None => continue, // proof too expensive — discard the board
         };
@@ -571,10 +528,9 @@ fn generate_capped(n: usize, seed: u64, caps: (usize, usize)) -> Grid {
                 break; // no legal edit in either direction, reroll
             }
 
-            solver.reset(&grid);
             let mut known = keep.clone();
             known.sort_unstable();
-            match solver.solve_other_within(SOLVE_BUDGET, &known) {
+            match DoubleSolver::new(&grid, K).solve_other_within(SOLVE_BUDGET, &known) {
                 None => break, // proof too expensive — discard the board
                 Some(None) => return grid, // keep is the unique solution
                 Some(Some(o)) => other = o,
@@ -1249,6 +1205,8 @@ mod tests {
     /// a wall-clock limit: returns None once the limit passes.
     /// Generation time has a heavy tail, and a sweep would rather count
     /// a timeout than wait one out (its time enters stats as the limit).
+    /// NOTE: this mirrors generate_capped's loop — if that loop changes,
+    /// change this one too or the sweeps tune the wrong algorithm.
     fn generate_limited(
         n: usize,
         seed: u64,
@@ -1258,7 +1216,6 @@ mod tests {
     ) -> Option<Grid> {
         let deadline = std::time::Instant::now() + limit;
         let mut rng = Rng::new(seed);
-        let mut solver: Option<DoubleSolver> = None;
 
         loop {
             if std::time::Instant::now() > deadline {
@@ -1268,14 +1225,7 @@ mod tests {
             if !regions_feasible(&grid, K) || !matchable(&grid, K) {
                 continue;
             }
-            let solver = match solver.as_mut() {
-                Some(s) => {
-                    s.reset(&grid);
-                    s
-                }
-                None => solver.insert(DoubleSolver::new(&grid, K)),
-            };
-            let sols = match solver.solve_within(budget) {
+            let sols = match DoubleSolver::new(&grid, K).solve_within(budget) {
                 Some(sols) => sols,
                 None => continue,
             };
@@ -1291,10 +1241,9 @@ mod tests {
                 } else {
                     break 'repair;
                 }
-                solver.reset(&grid);
                 let mut known = keep.clone();
                 known.sort_unstable();
-                match solver.solve_other_within(budget, &known) {
+                match DoubleSolver::new(&grid, K).solve_other_within(budget, &known) {
                     None => break 'repair,
                     Some(None) => return Some(grid),
                     Some(Some(o)) => other = o,
@@ -1402,7 +1351,6 @@ mod tests {
         let mut solve_time = Duration::ZERO;
         let mut grow_time = Duration::ZERO;
 
-        let mut solver: Option<DoubleSolver> = None;
         let mut done = 0;
         while done < target {
             let t = Instant::now();
@@ -1415,16 +1363,8 @@ mod tests {
                 continue;
             }
 
-            let solver = match solver.as_mut() {
-                Some(s) => {
-                    s.reset(&grid);
-                    s
-                }
-                None => solver.insert(DoubleSolver::new(&grid, K)),
-            };
-
             let t = Instant::now();
-            let sols = solver.solve_within(SOLVE_BUDGET);
+            let sols = DoubleSolver::new(&grid, K).solve_within(SOLVE_BUDGET);
             solve_time += t.elapsed();
             solves += 1;
 
@@ -1456,11 +1396,10 @@ mod tests {
                 }
                 repairs += 1;
 
-                solver.reset(&grid);
                 let mut known = keep.clone();
                 known.sort_unstable();
                 let t = Instant::now();
-                let res = solver.solve_other_within(SOLVE_BUDGET, &known);
+                let res = DoubleSolver::new(&grid, K).solve_other_within(SOLVE_BUDGET, &known);
                 solve_time += t.elapsed();
                 solves += 1;
                 match res {
