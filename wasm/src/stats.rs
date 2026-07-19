@@ -104,6 +104,6 @@ macro_rules! bump {
 #[macro_export]
 macro_rules! bump {
     ($self:ident.$field:ident) => {};
-    ($self:ident.$field:ident, $amt:expr) = {};
+    ($self:ident.$field:ident, $amt:expr) => {};
     ($field:ident) => {};
 }

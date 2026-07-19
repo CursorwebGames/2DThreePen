@@ -468,6 +468,58 @@ mod tests {
         bench(20, 50);
     }
 
+    /// Not run by default. Is the K-generic Algorithm M solver
+    /// (gendoubleai.rs — adjacency in the links, trail undo) faster
+    /// than the dedicated DLX SingleSolver at k=1? Same fresh-roll
+    /// boards, matching-filtered like the generator's real workload,
+    /// solution counts cross-checked.
+    /// `cargo test --release bench_double_solver_k1 -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn bench_double_solver_k1_n15() {
+        bench_double_solver_k1(15, 300);
+    }
+
+    #[test]
+    #[ignore]
+    fn bench_double_solver_k1_n20() {
+        bench_double_solver_k1(20, 300);
+    }
+
+    fn bench_double_solver_k1(n: usize, boards: usize) {
+        use crate::gendoubleai::DoubleSolver;
+        use std::time::{Duration, Instant};
+
+        let mut rng = Rng::new(42);
+        let (mut t_single, mut t_double) = (Duration::ZERO, Duration::ZERO);
+        let mut counts = [0usize; 3];
+        let mut tested = 0;
+
+        while tested < boards {
+            let grid = random_regions(n, &mut rng, num_capped(n));
+            if !matchable(&grid) {
+                continue;
+            }
+            tested += 1;
+
+            let t = Instant::now();
+            let s1 = SingleSolver::new(&grid).solve();
+            t_single += t.elapsed();
+
+            let t = Instant::now();
+            let s2 = DoubleSolver::new(&grid, 1).solve();
+            t_double += t.elapsed();
+
+            assert_eq!(s1.len(), s2.len(), "solvers disagree on {:?}", grid);
+            counts[s1.len()] += 1;
+        }
+
+        println!(
+            "n={}: SingleSolver {:?}, DoubleSolver(k=1) {:?} over {} boards (sols 0/1/2+: {:?})",
+            n, t_single, t_double, tested, counts
+        );
+    }
+
     /// Not run by default. How many zero-solution boards does the
     /// regions<->rows/cols matching pre-filter catch without solving?
     /// `cargo test --release matching_filter -- --ignored --nocapture`
