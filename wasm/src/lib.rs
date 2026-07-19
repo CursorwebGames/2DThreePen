@@ -5,7 +5,6 @@ pub mod genpenai;
 mod llist;
 mod matrix;
 mod single_solver;
-#[cfg(not(target_arch = "wasm32"))]
 mod stats;
 #[cfg(debug_assertions)]
 mod utils;
