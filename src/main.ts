@@ -2,6 +2,7 @@ import "p5";
 import { BullPen, REGION_BORDER } from "./bullpen";
 import { Solver } from "./solver";
 import { genSingle } from "./genpen";
+// import { crabIcon } from "./crabIcon";
 
 let pen: BullPen;
 let solver: Solver;
@@ -33,6 +34,7 @@ window.windowResized = () => {
 window.draw = () => {
     background(222);
     pen.draw();
+    // crabIcon(width / 2, height / 2);
 };
 
 window.mouseDragged = () => {
@@ -50,6 +52,12 @@ window.mouseReleased = () => {
 (document.querySelector(".undo") as HTMLButtonElement).addEventListener("click", () => pen.undo());
 (document.querySelector(".redo") as HTMLButtonElement).addEventListener("click", () => pen.redo());
 (document.querySelector(".clear") as HTMLButtonElement).addEventListener("click", () => pen.clear());
+
+const easyPlaceButton = document.querySelector(".easy-place") as HTMLButtonElement;
+easyPlaceButton.addEventListener("click", () => {
+    pen.toggleEasyPlaceMode();
+    easyPlaceButton.textContent = pen.easyPlaceMode ? "Turn off Easy Place" : "Turn on Easy Place";
+});
 
 document.addEventListener("keydown", (e) => {
     if (e.ctrlKey && e.key == "z" && !e.shiftKey) { e.preventDefault(); pen.undo(); }

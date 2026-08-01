@@ -487,7 +487,7 @@ mod tests {
     }
 
     fn bench_double_solver_k1(n: usize, boards: usize) {
-        use crate::gendoubleai::DoubleSolver;
+        use crate::gendouble_test::DoubleSolver;
         use std::time::{Duration, Instant};
 
         let mut rng = Rng::new(42);

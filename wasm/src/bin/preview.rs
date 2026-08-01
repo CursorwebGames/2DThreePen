@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use bullpen::gendoubleai::{self, DoubleSolver};
+use bullpen::gendouble_test::{self, DoubleSolver};
 use bullpen::{GenPen, SingleSolver};
 use fastrand::Rng;
 
@@ -55,7 +55,7 @@ fn preview_single(n: usize) {
 fn preview_double(n: usize) {
     let seed = fastrand::u64(..);
     let t = Instant::now();
-    let grid = gendoubleai::generate(n, seed);
+    let grid = gendouble_test::generate(n, seed);
     let elapsed = t.elapsed().as_secs_f64() * 1000.0;
 
     let solution = DoubleSolver::new(&grid, 2).solve();
