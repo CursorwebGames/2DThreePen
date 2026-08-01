@@ -9,15 +9,33 @@
 </head>
 
 <body>
-    <button class="undo">Undo</button>
-    <button class="redo">Redo</button>
-    <button class="clear">Clear</button>
-    <button class="easy-place">Easy Place Mode</button>
-    <div class="canvas"></div>
-    <button class="hint">Get Hint</button>
-    <button class="gen">New Puzzle</button>
-    <button class="export">Export Puzzle</button>
-    <div class="hint-desc"></div>
+    <div id="menu-screen" class="screen">
+        <h1>🦀 CrabPen</h1>
+        <p class="subtitle">Easy Mode — one crab per row, column, and pen</p>
+        <div class="size-grid"></div>
+        <div class="menu-status"></div>
+    </div>
+
+    <div id="play-screen" class="screen hidden">
+        <div class="topbar">
+            <button class="back">← Menu</button>
+            <div class="status"></div>
+            <button class="settings-toggle">⚙ Settings</button>
+        </div>
+
+        <div class="play-menu hidden">
+            <button class="new-puzzle">New Puzzle</button>
+            <button class="easy-place">Turn off Easy Place</button>
+            <button class="undo">Undo</button>
+            <button class="redo">Redo</button>
+            <button class="clear">Clear</button>
+            <button class="hint">Get Hint</button>
+        </div>
+
+        <div class="canvas"></div>
+        <div class="hint-desc"></div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
 </body>
 

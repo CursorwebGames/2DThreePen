@@ -1,4 +1,136 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: system-ui, sans-serif;
+    background: #f4f4f4;
+    color: #222;
+}
+
+button {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.5em 1em;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    background: #fff;
+    color: #222;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.05s;
+}
+
+button:hover {
+    background: #eaeaea;
+}
+
+button:active {
+    transform: scale(0.97);
+}
+
+.screen {
+    width: 100%;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Menu screen */
+
+#menu-screen h1 {
+    margin-bottom: 0.2em;
+}
+
+#menu-screen .subtitle {
+    margin-top: 0;
+    color: #666;
+}
+
+.size-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-top: 16px;
+}
+
+.size-btn {
+    padding: 1em;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.menu-status {
+    margin-top: 16px;
+    min-height: 1.2em;
+    color: #666;
+}
+
+/* Play screen */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.status {
+    flex: 1;
+    text-align: center;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.status.playing {
+    color: #555;
+}
+
+.status.invalid {
+    color: #b00020;
+    background: #ffe1e1;
+}
+
+.status.won {
+    color: #0a7d2c;
+    background: #dcffe4;
+}
+
+.play-menu {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    width: 100%;
+}
+
 .canvas {
     display: flex;
     justify-content: center;
+}
+
+.hint-desc {
+    margin-top: 10px;
+    min-height: 1.2em;
+    text-align: center;
+    color: #444;
 }

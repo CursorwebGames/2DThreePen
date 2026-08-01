@@ -12,6 +12,25 @@ export const REGION_BORDER = 3;
 
 type Mask = typeof BULL | typeof EMPTY | typeof DOT | typeof AUTODOT;
 
+/**
+ * Result of checkBoard(): the overall state, plus exactly which rules are
+ * broken so a consumer can explain (or highlight) the problem instead of
+ * just knowing "something" is wrong.
+ */
+export type BoardStatus = {
+    state: "playing" | "invalid" | "won";
+    violations: {
+        /** Row indices with more crabs than crabLimit allows. */
+        rows: number[];
+        /** Column indices with more crabs than crabLimit allows. */
+        cols: number[];
+        /** Region ids with more crabs than crabLimit allows. */
+        regions: number[];
+        /** Pairs of crabs that sit adjacent (including diagonally) to each other. */
+        adjacent: [Point, Point][];
+    };
+};
+
 export class BullPen {
     board: number[][];
     colors: p5.Color[] = [];
@@ -20,7 +39,8 @@ export class BullPen {
     private canvasSize: number;
 
     onBoardChange!: () => void;
-    onComplete!: () => void;
+    /** Called after every mask change with the current board status; hook custom win effects, sounds, or violation highlighting here. */
+    onStatusChange!: (status: BoardStatus) => void;
 
     private undoStack: Mask[][][] = [];
     private redoStack: Mask[][][] = [];
@@ -228,8 +248,61 @@ export class BullPen {
         pop();
     }
 
+    /**
+     * Recomputes crab counts per row/col/region and adjacency conflicts,
+     * then reports "invalid" (a rule is broken), "won" (every rule is
+     * satisfied with exactly crabLimit crabs each), or "playing".
+     */
     checkBoard() {
-        // todo: check for invalid bulls, check if it is all valid (do onComplete)
+        if (!this.onStatusChange) return;
+
+        const crabs: Point[] = [];
+        const rowCounts = Array(this.size).fill(0);
+        const colCounts = Array(this.size).fill(0);
+        const regionCounts = Array(this.size).fill(0);
+        for (let y = 0; y < this.size; y++) {
+            for (let x = 0; x < this.size; x++) {
+                if (this.mask[y][x] != BULL) continue;
+                crabs.push([y, x]);
+                rowCounts[y]++;
+                colCounts[x]++;
+                regionCounts[this.board[y][x]]++;
+            }
+        }
+
+        const rows: number[] = [];
+        const cols: number[] = [];
+        const regions: number[] = [];
+        for (let i = 0; i < this.size; i++) {
+            if (rowCounts[i] > this.crabLimit) rows.push(i);
+            if (colCounts[i] > this.crabLimit) cols.push(i);
+            if (regionCounts[i] > this.crabLimit) regions.push(i);
+        }
+
+        const adjacent: [Point, Point][] = [];
+        const seenPairs = new Set<string>();
+        for (const [y, x] of crabs) {
+            for (const [ay, ax] of this.getAdjacent(y, x)) {
+                if (this.mask[ay][ax] != BULL) continue;
+                const key = [`${y},${x}`, `${ay},${ax}`].sort().join('|');
+                if (seenPairs.has(key)) continue;
+                seenPairs.add(key);
+                adjacent.push([[y, x], [ay, ax]]);
+            }
+        }
+
+        const violations = { rows, cols, regions, adjacent };
+
+        if (rows.length || cols.length || regions.length || adjacent.length) {
+            this.onStatusChange({ state: "invalid", violations });
+            return;
+        }
+
+        const won = rowCounts.every(c => c == this.crabLimit)
+            && colCounts.every(c => c == this.crabLimit)
+            && regionCounts.every(c => c == this.crabLimit);
+
+        this.onStatusChange({ state: won ? "won" : "playing", violations });
     }
 
     private cellAt(mx: number, my: number): { x: number; y: number } | null {
@@ -255,17 +328,20 @@ export class BullPen {
         if (!this.undoStack.length) return;
         this.redoStack.push(this.copyMask());
         this.mask = this.undoStack.pop()!;
+        this.checkBoard();
     }
 
     redo() {
         if (!this.redoStack.length) return;
         this.undoStack.push(this.copyMask());
         this.mask = this.redoStack.pop()!;
+        this.checkBoard();
     }
 
     clear() {
         this.pushUndo(this.copyMask());
         this.mask = Array.from({ length: this.size }, () => Array(this.size).fill(EMPTY));
+        this.checkBoard();
     }
 
     /**
@@ -305,6 +381,7 @@ export class BullPen {
         }
 
         this.onBoardChange();
+        this.checkBoard();
     }
 
     mouseDragged() {
