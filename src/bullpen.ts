@@ -3,12 +3,14 @@ import type { Point } from "./solver";
 const BULL = 0;
 const EMPTY = -1;
 const DOT = 1;
+/** Auto-derived "can't place here" mark, recomputed from crab positions. Distinct from a manually placed DOT so removing a crab never eats a mark the player made themselves. */
+const AUTODOT = 2;
 
 // const RECT_SIZE = 50;
 const PADDING = 1;
 export const REGION_BORDER = 3;
 
-type Mask = typeof BULL | typeof EMPTY | typeof DOT;
+type Mask = typeof BULL | typeof EMPTY | typeof DOT | typeof AUTODOT;
 
 export class BullPen {
     board: number[][];
@@ -28,6 +30,11 @@ export class BullPen {
     private dragMode: typeof DOT | typeof EMPTY | null = null;
     private hasDragged = false;
     private pressedCell: { x: number; y: number } | null = null;
+
+    /** Whether placing/removing a crab auto-marks surrounding cells as invalid. */
+    easyPlaceMode = true;
+    /** Max crabs allowed per row/column/region: 1 = one-crab mode, 2 = two-crab mode. */
+    crabLimit: 1 | 2 = 1;
 
     mask: (Mask)[][];
 
@@ -209,7 +216,7 @@ export class BullPen {
 
                 const cell = this.mask[y][x];
                 const cellColor = this.colors[this.board[y][x]];
-                if (cell == DOT) {
+                if (cell == DOT || cell == AUTODOT) {
                     noStroke();
                     fill(0, 0, 0, 125);
                     rect(rx, ry, this.rectSize, this.rectSize);
@@ -314,10 +321,87 @@ export class BullPen {
 
     private applyDrag(x: number, y: number) {
         if (this.dragMode == DOT) {
-            if (this.mask[y][x] == EMPTY) this.mask[y][x] = DOT;
+            if (this.mask[y][x] == EMPTY || this.mask[y][x] == AUTODOT) this.mask[y][x] = DOT;
         } else {
-            if (this.mask[y][x] != BULL) this.mask[y][x] = EMPTY;
+            // AUTODOT is derived, not erasable directly; it falls back to EMPTY via recompute once its crab is gone
+            if (this.mask[y][x] != BULL && this.mask[y][x] != AUTODOT) this.mask[y][x] = EMPTY;
         }
+    }
+
+    private getAdjacent(y: number, x: number): Point[] {
+        const out: Point[] = [];
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dy == 0 && dx == 0) continue;
+                const ny = y + dy, nx = x + dx;
+                if (ny >= 0 && ny < this.size && nx >= 0 && nx < this.size) {
+                    out.push([ny, nx]);
+                }
+            }
+        }
+        return out;
+    }
+
+    private mark(y: number, x: number) {
+        if (this.mask[y][x] == EMPTY) this.mask[y][x] = AUTODOT;
+    }
+
+    /**
+     * Recompute the AUTODOT layer from scratch based on current crab positions.
+     * Never touches BULL or manually-placed DOT cells.
+     */
+    private recomputeAutoDots() {
+        for (let y = 0; y < this.size; y++) {
+            for (let x = 0; x < this.size; x++) {
+                if (this.mask[y][x] == AUTODOT) this.mask[y][x] = EMPTY;
+            }
+        }
+        if (!this.easyPlaceMode) return;
+
+        const crabs: Point[] = [];
+        const rowCounts = Array(this.size).fill(0);
+        const colCounts = Array(this.size).fill(0);
+        const regionCounts = Array(this.size).fill(0);
+        for (let y = 0; y < this.size; y++) {
+            for (let x = 0; x < this.size; x++) {
+                if (this.mask[y][x] != BULL) continue;
+                crabs.push([y, x]);
+                rowCounts[y]++;
+                colCounts[x]++;
+                regionCounts[this.board[y][x]]++;
+            }
+        }
+
+        for (const [y, x] of crabs) {
+            for (const [ay, ax] of this.getAdjacent(y, x)) this.mark(ay, ax);
+
+            if (rowCounts[y] >= this.crabLimit) {
+                for (let cx = 0; cx < this.size; cx++) this.mark(y, cx);
+            }
+
+            if (colCounts[x] >= this.crabLimit) {
+                for (let cy = 0; cy < this.size; cy++) this.mark(cy, x);
+            }
+
+            const region = this.board[y][x];
+            if (regionCounts[region] >= this.crabLimit) {
+                for (let cy = 0; cy < this.size; cy++) {
+                    for (let cx = 0; cx < this.size; cx++) {
+                        if (this.board[cy][cx] == region) this.mark(cy, cx);
+                    }
+                }
+            }
+        }
+    }
+
+    setCrabLimit(limit: 1 | 2) {
+        this.crabLimit = limit;
+        this.recomputeAutoDots();
+    }
+
+    toggleEasyPlaceMode() {
+        this.easyPlaceMode = !this.easyPlaceMode;
+        this.recomputeAutoDots();
     }
 
     mousePressed() {
@@ -339,9 +423,10 @@ export class BullPen {
             const { x, y } = this.pressedCell;
             const cur = this.beforeSnapshot![y][x];
             this.mask = this.beforeSnapshot!.map(row => [...row]) as Mask[][];
-            if (cur == EMPTY) this.mask[y][x] = DOT;
+            if (cur == EMPTY || cur == AUTODOT) this.mask[y][x] = DOT;
             else if (cur == DOT) this.mask[y][x] = BULL;
             else this.mask[y][x] = EMPTY;
+            this.recomputeAutoDots();
             this.pushUndo(this.beforeSnapshot!);
         }
         this.dragMode = null;

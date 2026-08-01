@@ -1,7 +1,7 @@
 mod cell;
 mod gen_single;
-pub mod gendoubleai;
-pub mod genpenai;
+pub mod gendouble_test;
+pub mod genpen_test;
 mod llist;
 mod matrix;
 mod single_solver;
