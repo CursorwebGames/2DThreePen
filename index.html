@@ -11,19 +11,19 @@
 <body>
     <div id="menu-screen" class="screen">
         <h1>🦀 CrabPen</h1>
-        <p class="subtitle">Easy Mode — one crab per row, column, and pen</p>
+        <p class="subtitle">OneCrab: one crab per row, column, and pen</p>
         <div class="size-grid"></div>
         <div class="menu-status"></div>
     </div>
 
-    <div id="play-screen" class="screen hidden">
+    <div id="play-screen" class="screen hide">
         <div class="topbar">
             <button class="back">← Menu</button>
             <div class="status"></div>
             <button class="settings-toggle">⚙ Settings</button>
         </div>
 
-        <div class="play-menu hidden">
+        <div class="play-menu hide">
             <button class="new-puzzle">New Puzzle</button>
             <button class="easy-place">Turn off Easy Place</button>
             <button class="undo">Undo</button>
@@ -32,7 +32,13 @@
             <button class="hint">Get Hint</button>
         </div>
 
-        <div class="canvas"></div>
+        <div class="game">
+            <div class="canvas"></div>
+            <div class="win-overlay hide">
+                <h1>Puzzle Solved!</h1>
+                <button class="new-puzzle">New Puzzle</button>
+            </div>
+        </div>
         <div class="hint-desc"></div>
     </div>
 

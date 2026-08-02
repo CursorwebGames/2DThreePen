@@ -18,6 +18,7 @@ const sizeGrid = document.querySelector(".size-grid") as HTMLDivElement;
 const statusEl = document.querySelector(".status") as HTMLDivElement;
 const hintDesc = document.querySelector(".hint-desc") as HTMLDivElement;
 const playMenu = document.querySelector(".play-menu") as HTMLDivElement;
+const winOverlay = document.querySelector(".win-overlay") as HTMLDivElement;
 const canvasParent = document.querySelector(".canvas") as HTMLDivElement;
 const easyPlaceButton = document.querySelector(".easy-place") as HTMLButtonElement;
 
@@ -37,8 +38,8 @@ function getCanvasSize() {
 }
 
 function showMenu() {
-    playScreen.classList.add("hidden");
-    menuScreen.classList.remove("hidden");
+    playScreen.classList.add("hide");
+    menuScreen.classList.remove("hide");
     noLoop();
 }
 
@@ -50,9 +51,9 @@ async function startGame(size: number) {
         pen.setBoard(board);
         hintDesc.textContent = "";
         menuStatus.textContent = "";
-        menuScreen.classList.add("hidden");
-        playScreen.classList.remove("hidden");
-        playMenu.classList.add("hidden");
+        menuScreen.classList.add("hide");
+        playScreen.classList.remove("hide");
+        playMenu.classList.add("hide");
         loop();
         windowResized();
     } catch (e) {
@@ -89,6 +90,8 @@ function setStatus(status: BoardStatus) {
     if (status.state == "won") statusEl.textContent = "You win! 🦀";
     else if (status.state == "invalid") statusEl.textContent = `Invalid: ${describeViolations(status.violations)}`;
     else statusEl.textContent = "";
+
+    winOverlay.classList.toggle("hide", status.state != "won");
 }
 
 window.setup = () => {
@@ -115,28 +118,35 @@ window.draw = () => {
     pen.draw();
 };
 
+/** p5 binds mouse handlers to `window`, so DOM stacking (e.g. the win overlay) doesn't block them on its own - gate manually. */
+function canInteractWithBoard() {
+    return !playScreen.classList.contains("hide") && winOverlay.classList.contains("hide");
+}
+
 window.mouseDragged = () => {
-    if (playScreen.classList.contains("hidden")) return;
+    if (!canInteractWithBoard()) return;
     pen.mouseDragged();
 };
 
 window.mousePressed = () => {
-    if (playScreen.classList.contains("hidden")) return;
+    if (!canInteractWithBoard()) return;
     pen.mousePressed();
 };
 
 window.mouseReleased = () => {
-    if (playScreen.classList.contains("hidden")) return;
+    if (!canInteractWithBoard()) return;
     pen.mouseReleased();
 };
 
 (document.querySelector(".back") as HTMLButtonElement).addEventListener("click", () => showMenu());
 
 (document.querySelector(".settings-toggle") as HTMLButtonElement).addEventListener("click", () => {
-    playMenu.classList.toggle("hidden");
+    playMenu.classList.toggle("hide");
 });
 
-(document.querySelector(".new-puzzle") as HTMLButtonElement).addEventListener("click", () => newPuzzle());
+document.querySelectorAll<HTMLButtonElement>(".new-puzzle").forEach(btn => {
+    btn.addEventListener("click", () => newPuzzle());
+});
 
 (document.querySelector(".undo") as HTMLButtonElement).addEventListener("click", () => pen.undo());
 (document.querySelector(".redo") as HTMLButtonElement).addEventListener("click", () => pen.redo());
@@ -148,7 +158,7 @@ easyPlaceButton.addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", (e) => {
-    if (playScreen.classList.contains("hidden")) return;
+    if (playScreen.classList.contains("hide")) return;
     if (e.ctrlKey && e.key == "z" && !e.shiftKey) { e.preventDefault(); pen.undo(); }
     else if (e.ctrlKey && (e.key == "y" || e.key == "Z")) { e.preventDefault(); pen.redo(); }
 });
